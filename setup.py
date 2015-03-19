@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
+
 try:
     from setuptools import setup
 except ImportError:
@@ -23,7 +25,12 @@ except ImportError:
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-mockupdb_link = 'git+git://github.com/ajdavis/mongo-mockup-db.git'
+mockupdb_link = ('https://github.com/ajdavis/mongo-mockup-db/archive/master.zip'
+                 '#egg=mockupdb')
+
+tests_require = ['mockupdb']
+if sys.version_info[:2] == (2, 6):
+    tests_require.append('unittest2')
 
 setup(
     name='PyMongo MockupDB tests',
@@ -33,7 +40,7 @@ setup(
     author="A. Jesse Jiryu Davis",
     author_email='jesse@mongodb.com',
     url='https://github.com/ajdavis/pymongo-mockup-tests',
-    tests_require=['pymongo', 'mockupdb'],
+    tests_require=tests_require,
     dependency_links=[mockupdb_link],
     license="Apache License, Version 2.0",
     zip_safe=False,
