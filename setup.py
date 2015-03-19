@@ -23,10 +23,6 @@ except ImportError:
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-pymongo_link = (
-    'https://github.com/mongodb/mongo-python-driver/archive/3.0b0.tar.gz'
-    '#egg=pymongo')
-
 mockupdb_link = 'git+git://github.com/ajdavis/mongo-mockup-db.git'
 
 setup(
@@ -38,7 +34,7 @@ setup(
     author_email='jesse@mongodb.com',
     url='https://github.com/ajdavis/pymongo-mockup-tests',
     tests_require=['pymongo', 'mockupdb'],
-    dependency_links=[pymongo_link, mockupdb_link],
+    dependency_links=[mockupdb_link],
     license="Apache License, Version 2.0",
     zip_safe=False,
     classifiers=[
