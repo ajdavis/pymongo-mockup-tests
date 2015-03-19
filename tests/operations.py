@@ -13,42 +13,51 @@
 # limitations under the License.
 
 from collections import namedtuple
+
+from mockupdb import OpReply, REPLY_FLAGS
 from pymongo import ReadPreference
 
-# For testing the SlaveOkay bit setting, see:
-# https://github.com/mongodb/specifications/blob/master/source/server-selection/server-selection.rst#passing-read-preference-to-mongos
-Operation = namedtuple('operation', ['name', 'function', 'reply', 'op_type'])
+Operation = namedtuple('operation',
+                       ['name', 'function', 'reply', 'op_type', 'not_master'])
 
 operations = [
     Operation(
         'find_one',
         lambda client: client.db.collection.find_one(),
         reply={},
-        op_type='may-use-secondary'),
+        op_type='may-use-secondary',
+        not_master=OpReply({'$err': 'not master'},
+                           flags=REPLY_FLAGS['QueryFailure'])),
     Operation(
         'count',
         lambda client: client.db.collection.count(),
         reply={'n': 1},
-        op_type='may-use-secondary'),
+        op_type='may-use-secondary',
+        not_master=OpReply(ok=0, errmsg='not master')),
     Operation(
         'aggregate',
         lambda client: client.db.collection.aggregate([]),
         reply={'result': []},
-        op_type='may-use-secondary'),
+        op_type='may-use-secondary',
+        not_master=OpReply(ok=0, errmsg='not master')),
     Operation(
         'command',
         lambda client: client.db.command('foo'),
         reply={'ok': 1},
-        op_type='must-use-primary'),  # Ignores client's read preference.
+        op_type='must-use-primary',  # Ignores client's read preference.
+        not_master=OpReply(ok=0, errmsg='not master')),
     Operation(
         'secondary command',
         lambda client:
             client.db.command('foo', read_preference=ReadPreference.SECONDARY),
         reply={'ok': 1},
-        op_type='always-use-secondary'),
+        op_type='always-use-secondary',
+        not_master=OpReply(ok=0, errmsg='node is recovering')),
     Operation(
         'collection_names',
         lambda client: client.db.collection_names(),
         reply=[],
-        op_type='must-use-primary'),
+        op_type='must-use-primary',
+        not_master=OpReply({'$err': 'not master'},
+                           flags=REPLY_FLAGS['QueryFailure'])),
 ]
