@@ -21,11 +21,6 @@
 
 import itertools
 
-try:
-    from queue import Queue
-except ImportError:
-    from Queue import Queue
-
 from mockupdb import MockupDB, going, QUERY_FLAGS
 from pymongo import MongoClient
 from pymongo.read_preferences import (make_read_preference,
@@ -65,18 +60,16 @@ def create_slave_ok_single_test(mode, server_type, ismaster, operation):
 
         client = MongoClient(self.server.uri, read_preference=pref)
         with going(operation.function, client):
-            query = self.server.receive()
-            query.reply(operation.reply)
+            request = self.server.receive()
+            request.reply(operation.reply)
 
         self.assertEqual(topology_type_name(client), 'Single')
         if slave_ok:
-            self.assertTrue(
-                query.flags & QUERY_FLAGS['SlaveOkay'],
-                'SlaveOkay not set with topology type Single')
+            self.assertTrue(request.flags & QUERY_FLAGS['SlaveOkay'],
+                            'SlaveOkay not set')
         else:
-            self.assertFalse(
-                query.flags & QUERY_FLAGS['SlaveOkay'],
-                'SlaveOkay set with topology type Single')
+            self.assertFalse(request.flags & QUERY_FLAGS['SlaveOkay'],
+                             'SlaveOkay set')
 
     return test
 
