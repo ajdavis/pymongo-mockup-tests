@@ -14,23 +14,26 @@
 
 """Test PyMongo's SlaveOkay with:
 
-  - A direct connection to a standalone
-  - A direct connection to a slave
-  - A direct connection to a mongos
-  - A load-balanced connection to two mongoses
+- A direct connection to a standalone.
+- A direct connection to a slave.
+- A direct connection to a mongos.
 """
+
+import itertools
 
 try:
     from queue import Queue
 except ImportError:
     from Queue import Queue
 
+from mockupdb import MockupDB, going, QUERY_FLAGS
 from pymongo import MongoClient
+from pymongo.read_preferences import (make_read_preference,
+                                      read_pref_mode_from_name)
 from pymongo.topology_description import TOPOLOGY_TYPE
 
-from mockupdb import MockupDB, OpQuery, going, QUERY_FLAGS
-
 from tests import unittest
+from tests.operations import operations
 
 
 def topology_type_name(client):
@@ -44,55 +47,63 @@ class TestSlaveOkaySingle(unittest.TestCase):
         self.server.run()
         self.addCleanup(self.server.stop)
 
-    def _test_slave_okay(self, expect_slave_okay):
-        client = MongoClient(self.server.uri)
-        with going(client.db.collection.find_one):
-            query = self.server.gets(OpQuery)
-            query.reply({'one': 'doc'})
+
+def create_slave_ok_single_test(mode, server_type, ismaster, operation):
+    def test(self):
+        self.server.autoresponds('ismaster', **ismaster)
+        if operation.op_type == 'always-use-secondary':
+            slave_ok = True
+        elif operation.op_type == 'may-use-secondary':
+            slave_ok = mode != 'primary' or server_type != 'mongos'
+        elif operation.op_type == 'must-use-primary':
+            slave_ok = server_type != 'mongos'
+        else:
+            assert False, 'unrecognized op_type %r' % operation.op_type
+
+        pref = make_read_preference(read_pref_mode_from_name(mode),
+                                    tag_sets=None)
+
+        client = MongoClient(self.server.uri, read_preference=pref)
+        with going(operation.function, client):
+            query = self.server.receive()
+            query.reply(operation.reply)
 
         self.assertEqual(topology_type_name(client), 'Single')
-        if expect_slave_okay:
-            self.assertTrue(query.flags & QUERY_FLAGS['SlaveOkay'],
-                            'SlaveOkay not set with topology type Single')
+        if slave_ok:
+            self.assertTrue(
+                query.flags & QUERY_FLAGS['SlaveOkay'],
+                'SlaveOkay not set with topology type Single')
         else:
-            self.assertFalse(query.flags & QUERY_FLAGS['SlaveOkay'],
-                             'SlaveOkay set with topology type Single')
+            self.assertFalse(
+                query.flags & QUERY_FLAGS['SlaveOkay'],
+                'SlaveOkay set with topology type Single')
 
-    def test_standalone(self):
-        self.server.autoresponds('ismaster')
-        self._test_slave_okay(True)
-
-    def test_slave(self):
-        self.server.autoresponds('ismaster', ismaster=False)
-        self._test_slave_okay(True)
-
-    def test_mongos(self):
-        self.server.autoresponds('ismaster', msg='isdbgrid')
-        self._test_slave_okay(False)
+    return test
 
 
-class TestSlaveOkaySharded(unittest.TestCase):
-    def test_two_mongoses(self):
-        server1, server2 = MockupDB(), MockupDB()
+def generate_slave_ok_single_tests():
+    modes = 'primary', 'secondary', 'nearest'
+    server_types = [
+        ('standalone', {'ismaster': True}),
+        ('slave', {'ismaster': False}),
+        ('mongos', {'ismaster': True, 'msg': 'isdbgrid'})]
 
-        # Collect queries to either server in one queue.
-        q = Queue()
-        for server in server1, server2:
-            server.subscribe(q.put)
-            server.run()
-            self.addCleanup(server.stop)
-            server.autoresponds('ismaster', msg='isdbgrid')
+    matrix = itertools.product(modes, server_types, operations)
 
-        mongoses_uri = 'mongodb://%s,%s' % (server1.address_string,
-                                            server2.address_string)
+    for entry in matrix:
+        mode, (server_type, ismaster), operation = entry
+        test = create_slave_ok_single_test(mode, server_type, ismaster,
+                                           operation)
 
-        client = MongoClient(mongoses_uri)
-        with going(client.db.collection.find_one):
-            query = q.get(timeout=10)
-            query.reply({'one': 'doc'})
+        test_name = 'test_%s_%s_with_mode_%s' % (
+            operation.name.replace(' ', '_'), server_type, mode)
 
-        self.assertEqual(topology_type_name(client), 'Sharded')
-        self.assertFalse(query.flags & QUERY_FLAGS['SlaveOkay'])
+        test.__name__ = test_name
+        setattr(TestSlaveOkaySingle, test_name, test)
+
+
+generate_slave_ok_single_tests()
+
 
 if __name__ == '__main__':
     unittest.main()
