@@ -17,8 +17,9 @@ from collections import namedtuple
 from mockupdb import OpReply, REPLY_FLAGS
 from pymongo import ReadPreference
 
-Operation = namedtuple('operation',
-                       ['name', 'function', 'reply', 'op_type', 'not_master'])
+Operation = namedtuple(
+    'operation',
+    ['name', 'function', 'reply', 'op_type', 'wire_version', 'not_master'])
 
 operations = [
     Operation(
@@ -26,6 +27,7 @@ operations = [
         lambda client: client.db.collection.find_one(),
         reply={},
         op_type='may-use-secondary',
+        wire_version=0,
         not_master=OpReply({'$err': 'not master'},
                            flags=REPLY_FLAGS['QueryFailure'])),
     Operation(
@@ -33,18 +35,21 @@ operations = [
         lambda client: client.db.collection.count(),
         reply={'n': 1},
         op_type='may-use-secondary',
+        wire_version=0,
         not_master=OpReply(ok=0, errmsg='not master')),
     Operation(
         'aggregate',
         lambda client: client.db.collection.aggregate([]),
         reply={'result': []},
         op_type='may-use-secondary',
+        wire_version=0,
         not_master=OpReply(ok=0, errmsg='not master')),
     Operation(
         'command',
         lambda client: client.db.command('foo'),
         reply={'ok': 1},
         op_type='must-use-primary',  # Ignores client's read preference.
+        wire_version=0,
         not_master=OpReply(ok=0, errmsg='not master')),
     Operation(
         'secondary command',
@@ -52,12 +57,21 @@ operations = [
             client.db.command('foo', read_preference=ReadPreference.SECONDARY),
         reply={'ok': 1},
         op_type='always-use-secondary',
+        wire_version=0,
         not_master=OpReply(ok=0, errmsg='node is recovering')),
     Operation(
         'collection_names',
         lambda client: client.db.collection_names(),
         reply=[],
         op_type='must-use-primary',
+        wire_version=0,
         not_master=OpReply({'$err': 'not master'},
                            flags=REPLY_FLAGS['QueryFailure'])),
+    Operation(
+        'listCollections',
+        lambda client: client.db.collection_names(),
+        reply={'cursor': {'id': 0, 'firstBatch': []}},
+        op_type='must-use-primary',
+        wire_version=3,
+        not_master=OpReply(ok=0, errmsg='not master')),
 ]

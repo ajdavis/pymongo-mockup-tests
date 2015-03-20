@@ -17,7 +17,7 @@
 Just make sure SlaveOkay is *not* set on primary reads.
 """
 
-from mockupdb import MockupDB, going, QUERY_FLAGS, OpReply
+from mockupdb import MockupDB, going, QUERY_FLAGS
 from pymongo import MongoClient
 
 from tests import unittest
@@ -25,7 +25,7 @@ from tests.operations import operations
 
 
 class TestSlaveOkayRS(unittest.TestCase):
-    def setUp(self):
+    def setup_server(self, wire_version):
         self.primary, self.secondary = MockupDB(), MockupDB()
         for server in self.primary, self.secondary:
             server.run()
@@ -33,15 +33,19 @@ class TestSlaveOkayRS(unittest.TestCase):
 
         hosts = [server.address_string
                  for server in self.primary, self.secondary]
-        primary_response = OpReply(ismaster=True, setName='rs', hosts=hosts)
-        self.primary.autoresponds('ismaster', primary_response)
+        self.primary.autoresponds(
+            'ismaster',
+            ismaster=True, setName='rs', hosts=hosts,
+            maxWireVersion=wire_version)
         self.secondary.autoresponds(
             'ismaster',
-            ismaster=False, secondary=True, setName='rs', hosts=hosts)
+            ismaster=False, secondary=True, setName='rs', hosts=hosts,
+            maxWireVersion=wire_version)
 
 
 def create_slave_ok_rs_test(operation):
     def test(self):
+        self.setup_server(operation.wire_version)
         assert not operation.op_type == 'always-use-secondary'
 
         client = MongoClient(self.primary.uri, replicaSet='rs')

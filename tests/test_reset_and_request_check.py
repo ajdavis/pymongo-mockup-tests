@@ -31,12 +31,12 @@ class TestResetAndRequestCheck(unittest.TestCase):
         self.client = None
         self.server = None
 
-    def setUp(self):
+    def setup_server(self, wire_version):
         self.server = MockupDB()
 
         def responder(request):
             self.ismaster_time = time.time()
-            return request.ok(ismaster=True)
+            return request.ok(ismaster=True, maxWireVersion=wire_version)
 
         self.server.autoresponds('ismaster', responder)
         self.server.run()
@@ -49,6 +49,7 @@ class TestResetAndRequestCheck(unittest.TestCase):
     def _test_disconnect(self, operation):
         # Application operation fails. Test that client resets server
         # description and does *not* schedule immediate check.
+        self.setup_server(operation.wire_version)
 
         # Network error on application operation.
         with self.assertRaises(ConnectionFailure):
@@ -73,6 +74,8 @@ class TestResetAndRequestCheck(unittest.TestCase):
     def _test_timeout(self, operation):
         # Application operation times out. Test that client does *not* reset
         # server description and does *not* schedule immediate check.
+        self.setup_server(operation.wire_version)
+
         with self.assertRaises(ConnectionFailure):
             with going(operation.function, self.client):
                 self.server.receives()
@@ -89,6 +92,8 @@ class TestResetAndRequestCheck(unittest.TestCase):
 
     def _test_not_master(self, operation):
         # Application operation gets a "not master" error.
+        self.setup_server(operation.wire_version)
+
         with self.assertRaises(ConnectionFailure):
             with going(operation.function, self.client):
                 self.server.receives().replies(operation.not_master)
