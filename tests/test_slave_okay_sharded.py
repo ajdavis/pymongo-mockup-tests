@@ -54,8 +54,11 @@ class TestSlaveOkaySharded(unittest.TestCase):
 
 def create_slave_ok_sharded_test(mode, operation):
     def test(self):
+        if mode == 'secondary':
+            raise unittest.SkipTest('PYTHON-868')
         self.setup_server(operation.wire_version)
         if operation.op_type == 'always-use-secondary':
+            raise unittest.SkipTest('PYTHON-868')
             slave_ok = True
         elif operation.op_type == 'may-use-secondary':
             slave_ok = mode != 'primary'

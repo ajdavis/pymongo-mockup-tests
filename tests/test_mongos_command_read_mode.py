@@ -48,6 +48,7 @@ class TestMongosCommandReadMode(unittest.TestCase):
             self.assertTrue(command.flags & QUERY_FLAGS['SlaveOkay'],
                             'SlaveOkay not set')
 
+            raise unittest.SkipTest('PYTHON-865')
             self.assertEqual({'mode': 'secondary'},
                              command.doc.get('$readPreference'))
 
@@ -85,6 +86,7 @@ def create_mongos_read_mode_test(mode, operation):
         if mode in ('primary', 'secondary'):
             self.assertNotIn('$readPreference', request)
         else:
+            raise unittest.SkipTest('PYTHON-865')
             self.assertEqual(pref.document, request.doc.get('$readPreference'))
 
     return test
