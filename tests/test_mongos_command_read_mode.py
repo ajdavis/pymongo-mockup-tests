@@ -34,6 +34,8 @@ class TestMongosCommandReadMode(unittest.TestCase):
         collection = MongoClient(server.uri).test.collection
         with going(collection.aggregate, []):
             command = server.receives(aggregate='collection', pipeline=[])
+            self.assertFalse(command.flags & QUERY_FLAGS['SlaveOkay'],
+                             'SlaveOkay set')
             self.assertNotIn('$readPreference', command)
             command.ok(result=[{}])
 
@@ -43,6 +45,9 @@ class TestMongosCommandReadMode(unittest.TestCase):
         with going(secondary_collection.aggregate, []):
             command = server.receives(aggregate='collection', pipeline=[])
             command.ok(result=[{}])
+            self.assertTrue(command.flags & QUERY_FLAGS['SlaveOkay'],
+                            'SlaveOkay not set')
+
             self.assertEqual({'mode': 'secondary'},
                              command.doc.get('$readPreference'))
 
