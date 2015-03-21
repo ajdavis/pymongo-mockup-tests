@@ -67,8 +67,6 @@ def create_slave_ok_single_test(mode, server_type, ismaster, operation):
 
         self.assertEqual(topology_type_name(client), 'Single')
         if slave_ok:
-            if operation.name == 'mapreduce':
-                raise unittest.SkipTest('SPEC-178')
             self.assertTrue(request.flags & QUERY_FLAGS['SlaveOkay'],
                             'SlaveOkay not set')
         else:
