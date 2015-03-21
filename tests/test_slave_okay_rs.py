@@ -17,7 +17,7 @@
 Just make sure SlaveOkay is *not* set on primary reads.
 """
 
-from mockupdb import MockupDB, going, QUERY_FLAGS
+from mockupdb import MockupDB, going
 from pymongo import MongoClient
 
 from tests import unittest
@@ -53,9 +53,7 @@ def create_slave_ok_rs_test(operation):
             request = self.primary.receive()
             request.reply(operation.reply)
 
-        self.assertFalse(
-            request.flags & QUERY_FLAGS['SlaveOkay'],
-            'SlaveOkay set read mode "primary"')
+        self.assertFalse(request.slave_ok, 'SlaveOkay set read mode "primary"')
 
     return test
 

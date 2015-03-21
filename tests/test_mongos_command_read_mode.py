@@ -14,7 +14,7 @@
 
 import itertools
 
-from mockupdb import MockupDB, going, QUERY_FLAGS
+from mockupdb import MockupDB, going
 from pymongo import MongoClient, ReadPreference
 from pymongo.read_preferences import (make_read_preference,
                                       read_pref_mode_from_name,
@@ -34,8 +34,7 @@ class TestMongosCommandReadMode(unittest.TestCase):
         collection = MongoClient(server.uri).test.collection
         with going(collection.aggregate, []):
             command = server.receives(aggregate='collection', pipeline=[])
-            self.assertFalse(command.flags & QUERY_FLAGS['SlaveOkay'],
-                             'SlaveOkay set')
+            self.assertFalse(command.slave_ok, 'SlaveOkay set')
             self.assertNotIn('$readPreference', command)
             command.ok(result=[{}])
 
@@ -45,8 +44,7 @@ class TestMongosCommandReadMode(unittest.TestCase):
         with going(secondary_collection.aggregate, []):
             command = server.receives(aggregate='collection', pipeline=[])
             command.ok(result=[{}])
-            self.assertTrue(command.flags & QUERY_FLAGS['SlaveOkay'],
-                            'SlaveOkay not set')
+            self.assertTrue(command.slave_ok, 'SlaveOkay not set')
 
             raise unittest.SkipTest('PYTHON-865')
             self.assertEqual({'mode': 'secondary'},
@@ -77,11 +75,9 @@ def create_mongos_read_mode_test(mode, operation):
             request.reply(operation.reply)
 
         if slave_ok:
-            self.assertTrue(request.flags & QUERY_FLAGS['SlaveOkay'],
-                            'SlaveOkay not set')
+            self.assertTrue(request.slave_ok, 'SlaveOkay not set')
         else:
-            self.assertFalse(request.flags & QUERY_FLAGS['SlaveOkay'],
-                             'SlaveOkay set')
+            self.assertFalse(request.slave_ok, 'SlaveOkay set')
 
         if mode in ('primary', 'secondary'):
             self.assertNotIn('$readPreference', request)

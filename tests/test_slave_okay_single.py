@@ -21,7 +21,7 @@
 
 import itertools
 
-from mockupdb import MockupDB, going, QUERY_FLAGS
+from mockupdb import MockupDB, going
 from pymongo import MongoClient
 from pymongo.read_preferences import (make_read_preference,
                                       read_pref_mode_from_name)
@@ -67,11 +67,9 @@ def create_slave_ok_single_test(mode, server_type, ismaster, operation):
 
         self.assertEqual(topology_type_name(client), 'Single')
         if slave_ok:
-            self.assertTrue(request.flags & QUERY_FLAGS['SlaveOkay'],
-                            'SlaveOkay not set')
+            self.assertTrue(request.slave_ok, 'SlaveOkay not set')
         else:
-            self.assertFalse(request.flags & QUERY_FLAGS['SlaveOkay'],
-                             'SlaveOkay set')
+            self.assertFalse(request.slave_ok, 'SlaveOkay set')
 
     return test
 

@@ -28,7 +28,7 @@ try:
 except ImportError:
     from Queue import Queue
 
-from mockupdb import MockupDB, going, QUERY_FLAGS
+from mockupdb import MockupDB, going
 from pymongo import MongoClient
 
 from tests import unittest
@@ -76,11 +76,9 @@ def create_slave_ok_sharded_test(mode, operation):
             request.reply(operation.reply)
 
         if slave_ok:
-            self.assertTrue(request.flags & QUERY_FLAGS['SlaveOkay'],
-                            'SlaveOkay not set')
+            self.assertTrue(request.slave_ok, 'SlaveOkay not set')
         else:
-            self.assertFalse(request.flags & QUERY_FLAGS['SlaveOkay'],
-                             'SlaveOkay set')
+            self.assertFalse(request.slave_ok, 'SlaveOkay set')
 
     return test
 
