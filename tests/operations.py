@@ -20,6 +20,34 @@ from pymongo import ReadPreference
 Operation = namedtuple(
     'operation',
     ['name', 'function', 'reply', 'op_type', 'wire_version', 'not_master'])
+"""Client operations on MongoDB.
+
+Each has a human-readable name, a function that actually executes a test, and
+a type that maps to one of the types in the Server Selection Spec:
+'may-use-secondary', 'must-use-primary', etc.
+
+The special type 'always-use-secondary' applies to an operation with an explicit
+read mode, like the operation "command('c', read_preference=SECONDARY)".
+
+The wire version is the version in which the operation was introduced, and
+the not-master response is how a secondary responds to a must-use-primary op,
+or how a recovering member responds to a may-use-secondary op.
+
+Example uses:
+
+We can use "find_one" to validate that the SlaveOk bit is set when querying a
+standalone, even with mode PRIMARY, but that it isn't set when sent to a mongos
+with mode PRIMARY. Or it can validate that "$readPreference" is included in
+mongos queries except with mode PRIMARY or SECONDARY_PREFERRED (PYTHON-865).
+
+We can use "options_old" and "options_new" to test that the driver queries an
+old server's system.namespaces collection, but uses the listCollections command
+on a new server (PYTHON-857).
+
+"secondary command" is good to test that the client can direct reads to
+secondaries in a replica set, or select a mongos for secondary reads in a
+sharded cluster (PYTHON-868).
+"""
 
 not_master_reply_to_query = OpReply(
     {'$err': 'not master'},
