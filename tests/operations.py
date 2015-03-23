@@ -14,8 +14,12 @@
 
 from collections import namedtuple
 
-from mockupdb import OpReply, REPLY_FLAGS
+from mockupdb import *
+from mockupdb import OpUpdate
 from pymongo import ReadPreference
+
+__all__ = ['operations', 'upgrades']
+
 
 Operation = namedtuple(
     'operation',
@@ -150,4 +154,48 @@ operations = [
         op_type='must-use-primary',
         wire_version=3,
         not_master=not_master_reply_to_command),
+]
+
+
+_ops_by_name = dict([(op.name, op) for op in operations])
+
+Upgrade = namedtuple('Upgrade',
+                     ['name', 'function', 'old', 'new', 'wire_version'])
+
+upgrades = [
+    Upgrade('insert_one',
+            lambda client: client.db.collection.insert_one({}),
+            old=OpInsert(),
+            new=Command('insert', 'collection'),
+            wire_version=2),
+    Upgrade('replace_one',
+            lambda client: client.db.collection.replace_one({}, {}),
+            old=OpUpdate(),
+            new=Command('update', 'collection'),
+            wire_version=2),
+    Upgrade('delete_one',
+            lambda client: client.db.collection.delete_one({}),
+            old=OpDelete(),
+            new=Command('delete', 'collection'),
+            wire_version=2),
+    Upgrade('aggregation cursor',
+            lambda client: client.db.collection.aggregate([]),
+            old=Command('aggregate', 'collection', cursor=absent),
+            new=Command('aggregate', 'collection', cursor={}),
+            wire_version=1),
+    Upgrade('index_information',
+            lambda client: client.db.collection.index_information(),
+            old=OpQuery(namespace='db.system.indexes'),
+            new=Command('listIndexes', 'collection', namespace='db'),
+            wire_version=3),
+    Upgrade('collection_names',
+            lambda client: client.db.collection_names(),
+            old=OpQuery(namespace='db.system.namespaces'),
+            new=Command('listCollections', namespace='db'),
+            wire_version=3),
+    Upgrade('options',
+            lambda client: client.db.collection.options(),
+            old=OpQuery(namespace='db.system.namespaces'),
+            new=Command('listCollections', 'collection', namespace='db'),
+            wire_version=3),
 ]
