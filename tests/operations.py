@@ -196,6 +196,6 @@ upgrades = [
     Upgrade('options',
             lambda client: client.db.collection.options(),
             old=OpQuery(namespace='db.system.namespaces'),
-            new=Command('listCollections', 'collection', namespace='db'),
+            new=Command('listCollections', namespace='db'),
             wire_version=3),
 ]
