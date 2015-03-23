@@ -66,7 +66,7 @@ def create_mixed_version_sharded_test(upgrade):
             request.assert_matches(upgrade.old
                                    if request.server is self.mongos_old
                                    else upgrade.new)
-            if time.time() > start + 1000:
+            if time.time() > start + 10:
                 self.fail('never used both mongoses')
     return test
 
