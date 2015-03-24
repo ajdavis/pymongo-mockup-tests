@@ -14,6 +14,7 @@
 
 import itertools
 
+from bson import SON
 from mockupdb import MockupDB, going
 from pymongo import MongoClient, ReadPreference
 from pymongo.read_preferences import (make_read_preference,
@@ -42,13 +43,12 @@ class TestMongosCommandReadMode(unittest.TestCase):
             read_preference=ReadPreference.SECONDARY)
 
         with going(secondary_collection.aggregate, []):
-            command = server.receives(aggregate='collection', pipeline=[])
+            command = server.receives(
+                {'$query': SON([('aggregate', 'collection'),
+                                ('pipeline', [])]),
+                 '$readPreference': {'mode': 'secondary'}})
             command.ok(result=[{}])
             self.assertTrue(command.slave_ok, 'SlaveOkay not set')
-
-            raise unittest.SkipTest('PYTHON-865')
-            self.assertEqual({'mode': 'secondary'},
-                             command.doc.get('$readPreference'))
 
 
 def create_mongos_read_mode_test(mode, operation):
@@ -59,31 +59,41 @@ def create_mongos_read_mode_test(mode, operation):
         server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
                             maxWireVersion=operation.wire_version)
 
-        if operation.op_type in ('always-use-secondary', 'may-use-secondary'):
-            slave_ok = mode != 'primary'
-        elif operation.op_type == 'must-use-primary':
-            slave_ok = False
-        else:
-            assert False, 'unrecognized op_type %r' % operation.op_type
-
         pref = make_read_preference(read_pref_mode_from_name(mode),
                                     tag_sets=None)
 
         client = MongoClient(server.uri, read_preference=pref)
-        with going(operation.function, client):
+        with going(operation.function, client) as future:
             request = server.receive()
             request.reply(operation.reply)
+
+        future()  # No error.
+
+        if operation.op_type == 'always-use-secondary':
+            self.assertEqual(ReadPreference.SECONDARY.document,
+                             request.doc.get('$readPreference'))
+            slave_ok = mode != 'primary'
+            self.assertIn('$query', request.doc)
+        elif operation.op_type == 'must-use-primary':
+            self.assertNotIn('$readPreference', request)
+            self.assertNotIn('$query', request.doc)
+            slave_ok = False
+        elif operation.op_type == 'may-use-secondary':
+            slave_ok = mode != 'primary'
+            if mode in ('primary', 'secondaryPreferred'):
+                self.assertNotIn('$readPreference', request)
+                self.assertNotIn('$query', request.doc)
+            else:
+                self.assertEqual(pref.document,
+                                 request.doc.get('$readPreference'))
+                self.assertIn('$query', request.doc)
+        else:
+            self.fail('unrecognized op_type %r' % operation.op_type)
 
         if slave_ok:
             self.assertTrue(request.slave_ok, 'SlaveOkay not set')
         else:
             self.assertFalse(request.slave_ok, 'SlaveOkay set')
-
-        if mode in ('primary', 'secondary'):
-            self.assertNotIn('$readPreference', request)
-        else:
-            raise unittest.SkipTest('PYTHON-865')
-            self.assertEqual(pref.document, request.doc.get('$readPreference'))
 
     return test
 
