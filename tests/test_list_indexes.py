@@ -64,7 +64,7 @@ class TestListIndexes(unittest.TestCase):
                                       namespace='test.collection',
                                       cursor_id=123)
 
-            request.reply([{'name': 'index_1'}], starting_from=1, cursor_id=0)
+            request.reply([{'name': 'index_1'}], cursor_id=0)
 
         self.assertEqual([{'name': 'index_0'}, {'name': 'index_1'}], indexes())
         self.check_indexes(indexes())
