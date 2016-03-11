@@ -31,13 +31,13 @@ class TestInitialIsMaster(unittest.TestCase):
         self.addCleanup(client.close)
 
         # A single ismaster is enough for the client to be connected.
-        self.assertIsNone(client.address)
-        server.receives('ismaster').ok()
-        wait_until(lambda: client.address is not None,
-                   'update address', timeout=1)
+        self.assertFalse(client.nodes)
+        server.receives('ismaster').ok(ismaster=True)
+        wait_until(lambda: client.nodes,
+                   'update nodes', timeout=1)
 
         # At least 10 seconds before next heartbeat.
-        server.receives('ismaster').ok()
+        server.receives('ismaster').ok(ismaster=True)
         self.assertGreaterEqual(time.time() - start, 10)
 
 if __name__ == '__main__':
