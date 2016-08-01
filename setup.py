@@ -28,7 +28,7 @@ with open('README.rst') as readme_file:
 mockupdb_link = ('https://github.com/ajdavis/mongo-mockup-db/archive/master.zip'
                  '#egg=mockupdb')
 
-tests_require = ['mockupdb']
+tests_require = ['mockupdb', 'pymongo']
 if sys.version_info[:2] == (2, 6):
     tests_require.append('unittest2')
 
