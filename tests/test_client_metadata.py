@@ -19,16 +19,16 @@ from pymongo import MongoClient, version as pymongo_version, version_tuple
 from tests import unittest
 
 
-def _check_metadata(request):
+def _check_handshake_data(request):
     assert 'client' in request
-    meta = request['client']
+    data = request['client']
 
-    assert meta['application'] == {'name': 'my app'}
-    assert meta['driver'] == {'name': 'PyMongo', 'version': pymongo_version}
+    assert data['application'] == {'name': 'my app'}
+    assert data['driver'] == {'name': 'PyMongo', 'version': pymongo_version}
 
     # Keep it simple, just check these fields exist.
-    assert 'os' in meta
-    assert 'platform' in meta
+    assert 'os' in data
+    assert 'platform' in data
 
 
 class TestClientMetadata(unittest.TestCase):
@@ -54,23 +54,23 @@ class TestClientMetadata(unittest.TestCase):
 
         self.addCleanup(client.close)
 
-        # New monitoring sockets send metadata during handshake.
+        # New monitoring sockets send data during handshake.
         heartbeat = primary.receives('ismaster')
-        _check_metadata(heartbeat)
+        _check_handshake_data(heartbeat)
         heartbeat.ok(primary_response)
 
         heartbeat = secondary.receives('ismaster')
-        _check_metadata(heartbeat)
+        _check_handshake_data(heartbeat)
         heartbeat.ok(secondary_response)
 
-        # Subsequent heartbeats have no metadata.
+        # Subsequent heartbeats have no client data.
         primary.receives('ismaster', 1, client=absent).ok(primary_response)
         secondary.receives('ismaster', 1, client=absent).ok(secondary_response)
 
-        # After a disconnect, next ismaster has metadata again.
+        # After a disconnect, next ismaster has client data again.
         primary.receives('ismaster', 1, client=absent).hangup()
         heartbeat = primary.receives('ismaster')
-        _check_metadata(heartbeat)
+        _check_handshake_data(heartbeat)
         heartbeat.ok(primary_response)
 
         secondary.autoresponds('ismaster', secondary_response)
@@ -85,7 +85,7 @@ class TestClientMetadata(unittest.TestCase):
                     request.ok(primary_response)
                 else:
                     # Handshaking a new application socket.
-                    _check_metadata(heartbeat)
+                    _check_handshake_data(heartbeat)
                     request.ok(primary_response)
             else:
                 # Command succeeds.
