@@ -31,9 +31,9 @@ def _check_handshake_data(request):
     assert 'platform' in data
 
 
-class TestClientMetadata(unittest.TestCase):
+class TestHandshake(unittest.TestCase):
     @unittest.skipUnless(version_tuple >= (3, 4), "requires PyMongo 3.4")
-    def test_client_metadata(self):
+    def test_client_handshake_data(self):
         primary, secondary = MockupDB(), MockupDB()
         for server in primary, secondary:
             server.run()
