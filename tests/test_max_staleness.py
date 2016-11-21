@@ -12,104 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime, timedelta
-
-from mockupdb import MockupDB, going, wait_until
+from mockupdb import MockupDB, going
 from pymongo import MongoClient
-from pymongo.errors import ConfigurationError
 
 from tests import unittest
-
-
-# Initial query with maxStalenessSeconds and non-default idleWritePeriodMS.
-class TestIdleWritePeriod(unittest.TestCase):
-    def test_with_primary(self):
-        primary, secondary = MockupDB(), MockupDB()
-        for server in primary, secondary:
-            server.run()
-            self.addCleanup(server.stop)
-
-        hosts = [server.address_string for server in primary, secondary]
-        now = datetime.now()
-
-        # Wire version 5 required for max staleness. Set idle period to 1 sec.
-        primary.autoresponds(
-            'ismaster',
-            idleWritePeriodMillis=1000, ismaster=True, setName='rs',
-            hosts=hosts, maxWireVersion=5, lastWrite={'lastWriteDate': now})
-
-        secondary.autoresponds(
-            'ismaster',
-            idleWritePeriodMillis=1000, ismaster=False, secondary=True,
-            setName='rs', hosts=hosts, maxWireVersion=5,
-            lastWrite={'lastWriteDate': now})
-
-        # Set maxStalenessSeconds to 1.5.
-        uri = 'mongodb://localhost:%d,localhost:%d/?replicaSet=rs' \
-              '&readPreference=secondary&maxStalenessSeconds=1.5' % (
-                primary.port, secondary.port)
-
-        # Default heartbeat is 10 sec, so max staleness must be >= 11 sec.
-        with self.assertRaises(ConfigurationError) as ctx:
-            MongoClient(uri).db.coll.find_one()
-
-        self.assertIn(
-            'maxStalenessSeconds must be at least heartbeatFrequencyMS',
-            ctx.exception.message)
-
-        # Set heartbeat to 500ms, max staleness must be >= 1.5 sec.
-        client = MongoClient(uri, heartbeatFrequencyMS=500)
-        wait_until(lambda: len(client.nodes) == 2, 'discover both nodes')
-        with going(client.db.coll.find_one) as future:
-            secondary.receives(find='coll').ok(cursor={'firstBatch': [],
-                                                       'id': 0})
-
-        # find_one succeeds with no result.
-        self.assertIsNone(future())
-
-    def test_without_primary(self):
-        fresh, stale = MockupDB(), MockupDB()
-        for server in fresh, stale:
-            server.run()
-            self.addCleanup(server.stop)
-
-        hosts = [server.address_string for server in fresh, stale]
-        now = datetime.now()
-
-        # Wire version 5 required for max staleness. Set idle period to 1 sec.
-        fresh.autoresponds(
-            'ismaster',
-            idleWritePeriodMillis=1000, ismaster=False, secondary=True,
-            setName='rs', hosts=hosts, maxWireVersion=5,
-            lastWrite={'lastWriteDate': now})
-
-        stale.autoresponds(
-            'ismaster',
-            idleWritePeriodMillis=1000, ismaster=False, secondary=True,
-            setName='rs', hosts=hosts, maxWireVersion=5,
-            lastWrite={'lastWriteDate': now - timedelta(seconds=2)})
-
-        # Set maxStalenessSeconds to 1.5.
-        uri = 'mongodb://localhost:%d,localhost:%d/?replicaSet=rs' \
-              '&readPreference=secondary&maxStalenessSeconds=1.5' % (
-                  fresh.port, stale.port)
-
-        # Default heartbeat is 10 sec, so max staleness must be >= 11 sec.
-        with self.assertRaises(ConfigurationError) as ctx:
-            MongoClient(uri).db.coll.find_one()
-
-        self.assertIn(
-            'maxStalenessSeconds must be at least heartbeatFrequencyMS',
-            ctx.exception.message)
-
-        # Set heartbeat to 500ms, max staleness must be >= 1.5 sec.
-        client = MongoClient(uri, heartbeatFrequencyMS=500)
-        wait_until(lambda: len(client.nodes) == 2, 'discover both nodes')
-        with going(client.db.coll.find_one) as future:
-            fresh.receives(find='coll').ok(cursor={'firstBatch': [], 'id': 0})
-
-        # find_one succeeds with no result.
-        self.assertIsNone(future())
 
 
 class TestMaxStalenessMongos(unittest.TestCase):
@@ -135,14 +41,16 @@ class TestMaxStalenessMongos(unittest.TestCase):
         # find_one succeeds with no result.
         self.assertIsNone(future())
 
-        # Set maxStalenessSeconds to 1.5. Client has no minimum with mongos.
+        # Set maxStalenessSeconds to 1. Client has no minimum with mongos,
+        # we let mongos enforce the 90-second minimum and return an error:
+        # SERVER-27146.
         uri = 'mongodb://localhost:%d/?readPreference=secondary' \
-              '&maxStalenessSeconds=1.5' % mongos.port
+              '&maxStalenessSeconds=1' % mongos.port
 
         with going(MongoClient(uri).db.coll.find_one) as future:
             request = mongos.receives()
-            self.assertAlmostEqual(
-                1.5,
+            self.assertEqual(
+                1,
                 request.doc['$readPreference']['maxStalenessSeconds'])
 
             self.assertTrue(request.slave_okay)
