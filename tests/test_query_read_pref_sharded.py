@@ -33,6 +33,7 @@ class TestQueryAndReadModeSharded(unittest.TestCase):
         self.addCleanup(server.stop)
 
         client = MongoClient(server.uri)
+        self.addCleanup(client.close)
 
         modes_without_query = (
             Primary(),

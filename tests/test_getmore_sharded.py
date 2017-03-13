@@ -40,7 +40,7 @@ class TestGetmoreSharded(unittest.TestCase):
         client = MongoClient('mongodb://%s:%d,%s:%d' % (
             servers[0].host, servers[0].port,
             servers[1].host, servers[1].port))
-
+        self.addCleanup(client.close)
         collection = client.db.collection
         cursor = collection.find()
         with going(next, cursor):

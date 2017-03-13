@@ -61,6 +61,7 @@ def create_slave_ok_single_test(mode, server_type, ismaster, operation):
                                     tag_sets=None)
 
         client = MongoClient(self.server.uri, read_preference=pref)
+        self.addCleanup(client.close)
         with going(operation.function, client):
             request = self.server.receive()
             request.reply(operation.reply)

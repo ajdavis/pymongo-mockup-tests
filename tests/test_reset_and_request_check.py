@@ -43,8 +43,11 @@ class TestResetAndRequestCheck(unittest.TestCase):
         self.addCleanup(self.server.stop)
 
         self.client = MongoClient(self.server.uri, socketTimeoutMS=100)
-        self.addCleanup(self.client.close)
         wait_until(lambda: self.client.nodes, 'connect to standalone')
+
+    def tearDown(self):
+        if hasattr(self, 'client') and self.client:
+            self.client.close()
 
     def _test_disconnect(self, operation):
         # Application operation fails. Test that client resets server
@@ -118,13 +121,13 @@ def create_reset_test(operation, test_method):
 
 def generate_reset_tests():
     test_methods = [
-        (TestResetAndRequestCheck._test_disconnect, 'test_disconnect'), 
+        (TestResetAndRequestCheck._test_disconnect, 'test_disconnect'),
         (TestResetAndRequestCheck._test_timeout, 'test_timeout'),
         (TestResetAndRequestCheck._test_not_master, 'test_not_master'),
     ]
-    
+
     matrix = itertools.product(operations, test_methods)
-    
+
     for entry in matrix:
         operation, (test_method, name) = entry
         test = create_reset_test(operation, test_method)

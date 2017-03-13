@@ -53,6 +53,10 @@ class TestMixedVersionSharded(unittest.TestCase):
 
         self.client = MongoClient(self.mongoses_uri)
 
+    def tearDown(self):
+        if hasattr(self, 'client') and self.client:
+            self.client.close()
+
 
 def create_mixed_version_sharded_test(upgrade):
     def test(self):
