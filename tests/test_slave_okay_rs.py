@@ -49,6 +49,7 @@ def create_slave_ok_rs_test(operation):
         assert not operation.op_type == 'always-use-secondary'
 
         client = MongoClient(self.primary.uri, replicaSet='rs')
+        self.addCleanup(client.close)
         with going(operation.function, client):
             request = self.primary.receive()
             request.reply(operation.reply)

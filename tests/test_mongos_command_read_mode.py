@@ -32,7 +32,9 @@ class TestMongosCommandReadMode(unittest.TestCase):
         self.addCleanup(server.stop)
         server.run()
 
-        collection = MongoClient(server.uri).test.collection
+        client = MongoClient(server.uri)
+        self.addCleanup(client.close)
+        collection = client.test.collection
         with going(collection.aggregate, []):
             command = server.receives(aggregate='collection', pipeline=[])
             self.assertFalse(command.slave_ok, 'SlaveOkay set')
@@ -63,6 +65,7 @@ def create_mongos_read_mode_test(mode, operation):
                                     tag_sets=None)
 
         client = MongoClient(server.uri, read_preference=pref)
+        self.addCleanup(client.close)
         with going(operation.function, client) as future:
             request = server.receive()
             request.reply(operation.reply)

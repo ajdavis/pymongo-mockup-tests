@@ -33,6 +33,7 @@ class TestListIndexes(unittest.TestCase):
         server.run()
         self.addCleanup(server.stop)
         client = MongoClient(server.uri)
+        self.addCleanup(client.close)
         with going(client.test.collection.list_indexes) as cursor:
             request = server.receives(
                 OpQuery, namespace='test.system.indexes')
@@ -52,6 +53,7 @@ class TestListIndexes(unittest.TestCase):
         server.run()
         self.addCleanup(server.stop)
         client = MongoClient(server.uri)
+        self.addCleanup(client.close)
         with going(client.test.collection.list_indexes) as cursor:
             request = server.receives(
                 listIndexes='collection', namespace='test')

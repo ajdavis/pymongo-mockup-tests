@@ -29,7 +29,9 @@ class TestMaxStalenessMongos(unittest.TestCase):
         # No maxStalenessSeconds.
         uri = 'mongodb://localhost:%d/?readPreference=secondary' % mongos.port
 
-        with going(MongoClient(uri).db.coll.find_one) as future:
+        client = MongoClient(uri)
+        self.addCleanup(client.close)
+        with going(client.db.coll.find_one) as future:
             request = mongos.receives()
             self.assertNotIn(
                 'maxStalenessSeconds',
@@ -47,7 +49,9 @@ class TestMaxStalenessMongos(unittest.TestCase):
         uri = 'mongodb://localhost:%d/?readPreference=secondary' \
               '&maxStalenessSeconds=1' % mongos.port
 
-        with going(MongoClient(uri).db.coll.find_one) as future:
+        client = MongoClient(uri)
+        self.addCleanup(client.close)
+        with going(client.db.coll.find_one) as future:
             request = mongos.receives()
             self.assertEqual(
                 1,

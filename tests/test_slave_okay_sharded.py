@@ -68,6 +68,7 @@ def create_slave_ok_sharded_test(mode, operation):
                                     tag_sets=None)
 
         client = MongoClient(self.mongoses_uri, read_preference=pref)
+        self.addCleanup(client.close)
         with going(operation.function, client):
             request = self.q.get(timeout=1)
             request.reply(operation.reply)
