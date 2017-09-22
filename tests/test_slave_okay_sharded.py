@@ -36,7 +36,7 @@ from tests.operations import operations
 
 
 class TestSlaveOkaySharded(unittest.TestCase):
-    def setup_server(self, wire_version):
+    def setup_server(self):
         self.mongos1, self.mongos2 = MockupDB(), MockupDB()
 
         # Collect queries to either server in one queue.
@@ -45,7 +45,7 @@ class TestSlaveOkaySharded(unittest.TestCase):
             server.subscribe(self.q.put)
             server.run()
             self.addCleanup(server.stop)
-            server.autoresponds('ismaster', maxWireVersion=wire_version,
+            server.autoresponds('ismaster', minWireVersion=2, maxWireVersion=6,
                                 ismaster=True, msg='isdbgrid')
 
         self.mongoses_uri = 'mongodb://%s,%s' % (self.mongos1.address_string,
@@ -54,7 +54,7 @@ class TestSlaveOkaySharded(unittest.TestCase):
 
 def create_slave_ok_sharded_test(mode, operation):
     def test(self):
-        self.setup_server(operation.wire_version)
+        self.setup_server()
         if operation.op_type == 'always-use-secondary':
             slave_ok = True
         elif operation.op_type == 'may-use-secondary':

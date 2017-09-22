@@ -24,6 +24,8 @@ class TestAuthRecoveringMember(unittest.TestCase):
         # Test that we don't attempt auth against a recovering RS member.
         server = MockupDB()
         server.autoresponds('ismaster', {
+            'minWireVersion': 2,
+            'maxWireVersion': 6,
             'ismaster': False,
             'secondary': False,
             'setName': 'rs'})

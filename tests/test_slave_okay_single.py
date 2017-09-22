@@ -46,7 +46,8 @@ class TestSlaveOkaySingle(unittest.TestCase):
 def create_slave_ok_single_test(mode, server_type, ismaster, operation):
     def test(self):
         ismaster_with_version = ismaster.copy()
-        ismaster_with_version['maxWireVersion'] = operation.wire_version
+        ismaster_with_version['minWireVersion'] = 2
+        ismaster_with_version['maxWireVersion'] = 6
         self.server.autoresponds('ismaster', **ismaster_with_version)
         if operation.op_type == 'always-use-secondary':
             slave_ok = True

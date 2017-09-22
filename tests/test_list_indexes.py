@@ -16,38 +16,13 @@
 
 from bson import SON
 
-from mockupdb import going, MockupDB, OpGetMore, OpQuery
+from mockupdb import going, MockupDB, OpGetMore
 from pymongo import MongoClient
 
 from tests import unittest
 
 
 class TestListIndexes(unittest.TestCase):
-    def check_indexes(self, indexes):
-        self.assertEqual([{'name': 'index_0'}, {'name': 'index_1'}], indexes)
-        for index_info in indexes:
-            self.assertIsInstance(index_info, SON)
-
-    def test_indexes_query(self):
-        server = MockupDB(auto_ismaster=True)
-        server.run()
-        self.addCleanup(server.stop)
-        client = MongoClient(server.uri)
-        self.addCleanup(client.close)
-        with going(client.test.collection.list_indexes) as cursor:
-            request = server.receives(
-                OpQuery, namespace='test.system.indexes')
-            request.reply([{'name': 'index_0'}], cursor_id=123)
-
-        with going(list, cursor()) as indexes:
-            request = server.receives(OpGetMore,
-                                      namespace='test.system.indexes',
-                                      cursor_id=123)
-
-            request.reply([{'name': 'index_1'}], starting_from=1, cursor_id=0)
-
-        self.check_indexes(indexes())
-
     def test_list_indexes_command(self):
         server = MockupDB(auto_ismaster={'maxWireVersion': 3})
         server.run()
@@ -69,7 +44,8 @@ class TestListIndexes(unittest.TestCase):
             request.reply([{'name': 'index_1'}], cursor_id=0)
 
         self.assertEqual([{'name': 'index_0'}, {'name': 'index_1'}], indexes())
-        self.check_indexes(indexes())
+        for index_info in indexes():
+            self.assertIsInstance(index_info, SON)
 
 
 if __name__ == '__main__':

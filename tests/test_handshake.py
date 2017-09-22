@@ -41,11 +41,13 @@ class TestHandshake(unittest.TestCase):
 
         hosts = [server.address_string for server in primary, secondary]
         primary_response = OpReply('ismaster', True,
-                                   setName='rs', hosts=hosts)
+                                   setName='rs', hosts=hosts,
+                                   minWireVersion=2, maxWireVersion=6)
 
         secondary_response = OpReply('ismaster', False,
                                      setName='rs', hosts=hosts,
-                                     secondary=True)
+                                     secondary=True,
+                                     minWireVersion=2, maxWireVersion=6)
 
         client = MongoClient(primary.uri,
                              replicaSet='rs',

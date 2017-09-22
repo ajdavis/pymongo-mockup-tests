@@ -25,7 +25,7 @@ from tests.operations import operations
 
 
 class TestSlaveOkayRS(unittest.TestCase):
-    def setup_server(self, wire_version):
+    def setup_server(self):
         self.primary, self.secondary = MockupDB(), MockupDB()
         for server in self.primary, self.secondary:
             server.run()
@@ -36,16 +36,16 @@ class TestSlaveOkayRS(unittest.TestCase):
         self.primary.autoresponds(
             'ismaster',
             ismaster=True, setName='rs', hosts=hosts,
-            maxWireVersion=wire_version)
+            minWireVersion=2, maxWireVersion=6)
         self.secondary.autoresponds(
             'ismaster',
             ismaster=False, secondary=True, setName='rs', hosts=hosts,
-            maxWireVersion=wire_version)
+            minWireVersion=2, maxWireVersion=6)
 
 
 def create_slave_ok_rs_test(operation):
     def test(self):
-        self.setup_server(operation.wire_version)
+        self.setup_server()
         assert not operation.op_type == 'always-use-secondary'
 
         client = MongoClient(self.primary.uri, replicaSet='rs')

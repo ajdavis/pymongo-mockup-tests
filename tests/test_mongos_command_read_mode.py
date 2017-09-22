@@ -28,7 +28,8 @@ from tests.operations import operations
 class TestMongosCommandReadMode(unittest.TestCase):
     def test_aggregate(self):
         server = MockupDB()
-        server.autoresponds('ismaster', ismaster=True, msg='isdbgrid')
+        server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
+                            minWireVersion=2, maxWireVersion=6)
         self.addCleanup(server.stop)
         server.run()
 
@@ -47,7 +48,8 @@ class TestMongosCommandReadMode(unittest.TestCase):
         with going(secondary_collection.aggregate, []):
             command = server.receives(
                 {'$query': SON([('aggregate', 'collection'),
-                                ('pipeline', [])]),
+                                ('pipeline', []),
+                                ('cursor', {})]),
                  '$readPreference': {'mode': 'secondary'}})
             command.ok(result=[{}])
             self.assertTrue(command.slave_ok, 'SlaveOkay not set')
@@ -59,7 +61,7 @@ def create_mongos_read_mode_test(mode, operation):
         self.addCleanup(server.stop)
         server.run()
         server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
-                            maxWireVersion=operation.wire_version)
+                            minWireVersion=2, maxWireVersion=6)
 
         pref = make_read_preference(read_pref_mode_from_name(mode),
                                     tag_sets=None)

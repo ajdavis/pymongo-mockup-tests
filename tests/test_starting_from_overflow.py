@@ -22,7 +22,8 @@ from tests import unittest
 
 class TestStartingFromOverflow(unittest.TestCase):
     def test_query(self):
-        server = MockupDB(auto_ismaster=True)
+        server = MockupDB(auto_ismaster=True,
+                          min_wire_version=0, max_wire_version=3)
         server.run()
         self.addCleanup(server.stop)
         client = MongoClient(server.uri)
@@ -35,7 +36,7 @@ class TestStartingFromOverflow(unittest.TestCase):
 
         self.assertEqual([{'a': 1}, {'a': 2}], docs())
 
-    def test_command(self):
+    def test_aggregate(self):
         server = MockupDB(auto_ismaster={'maxWireVersion': 3})
         server.run()
         self.addCleanup(server.stop)
@@ -44,12 +45,29 @@ class TestStartingFromOverflow(unittest.TestCase):
             request = server.receives(Command)
             request.reply({'cursor': {
                 'id': 123,
-                'firstBatch': [{'a': 1}],
-                'starting_from': -11}})
+                'firstBatch': [{'a': 1}]}})
 
         with going(list, cursor()) as docs:
             request = server.receives(OpGetMore, cursor_id=123)
             request.reply({'a': 2}, starting_from=-3, cursor_id=0)
+
+        self.assertEqual([{'a': 1}, {'a': 2}], docs())
+
+    def test_find_command(self):
+        server = MockupDB(auto_ismaster={'maxWireVersion': 4})
+        server.run()
+        self.addCleanup(server.stop)
+        client = MongoClient(server.uri)
+        with going(list, client.test.collection.find()) as docs:
+            server.receives(Command).reply({'cursor': {
+                'id': 123,
+                'firstBatch': [{'a': 1}]}})
+
+            request = server.receives(Command("getMore", 123))
+            request.reply({'cursor': {
+                'id': 0,
+                'nextBatch': [{'a': 2}]}},
+                starting_from=-3)
 
         self.assertEqual([{'a': 1}, {'a': 2}], docs())
 

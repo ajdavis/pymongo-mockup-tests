@@ -36,11 +36,13 @@ class TestNetworkDisconnectPrimary(unittest.TestCase):
             self.addCleanup(server.stop)
 
         hosts = [server.address_string for server in servers]
-        primary_response = OpReply(ismaster=True, setName='rs', hosts=hosts)
+        primary_response = OpReply(ismaster=True, setName='rs', hosts=hosts,
+                                   minWireVersion=2, maxWireVersion=6)
         primary.autoresponds('ismaster', primary_response)
         secondary.autoresponds(
             'ismaster',
-            ismaster=False, secondary=True, setName='rs', hosts=hosts)
+            ismaster=False, secondary=True, setName='rs', hosts=hosts,
+            minWireVersion=2, maxWireVersion=6)
 
         client = MongoClient(primary.uri, replicaSet='rs')
         self.addCleanup(client.close)

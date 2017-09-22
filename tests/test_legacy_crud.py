@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from mockupdb import MockupDB, going, OpInsert, absent, Command
-from pymongo import MongoClient
+from pymongo import MongoClient, WriteConcern
 
 from tests import unittest
 
@@ -31,26 +31,24 @@ class TestLegacyCRUD(unittest.TestCase):
         client = MongoClient(server.uri)
         self.addCleanup(client.close)
 
+        coll = client.db.get_collection('coll', write_concern=WriteConcern(w=0))
         doc = {}
-        with going(client.db.coll.insert, doc, manipulate=False) as future:
+        with going(coll.insert, doc, manipulate=False) as future:
             server.receives(OpInsert({'_id': absent}))
-            server.receives('getlasterror').replies_to_gle()
 
         self.assertFalse('_id' in doc)
         self.assertIsNone(future())
 
         docs = [{}]  # One doc in a list.
-        with going(client.db.coll.insert, docs, manipulate=False) as future:
+        with going(coll.insert, docs, manipulate=False) as future:
             server.receives(OpInsert({'_id': absent}))
-            server.receives('getlasterror').replies_to_gle()
 
         self.assertFalse('_id' in docs[0])
         self.assertEqual(future(), [None])
 
         docs = [{}, {}]  # Two docs.
-        with going(client.db.coll.insert, docs, manipulate=False) as future:
+        with going(coll.insert, docs, manipulate=False) as future:
             server.receives(OpInsert({'_id': absent}, {'_id': absent}))
-            server.receives('getlasterror').replies_to_gle()
 
         self.assertFalse('_id' in docs[0])
         self.assertFalse('_id' in docs[1])

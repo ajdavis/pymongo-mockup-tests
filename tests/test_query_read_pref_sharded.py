@@ -14,13 +14,14 @@
 
 """Test PyMongo query and read preference with a sharded cluster."""
 
+from bson import SON
 from pymongo import MongoClient
 from pymongo.read_preferences import (Primary,
                                       PrimaryPreferred,
                                       Secondary,
                                       SecondaryPreferred,
                                       Nearest)
-from mockupdb import MockupDB, going, OpQuery
+from mockupdb import MockupDB, going, Command
 
 from tests import unittest
 
@@ -28,7 +29,8 @@ from tests import unittest
 class TestQueryAndReadModeSharded(unittest.TestCase):
     def test_query_and_read_mode_sharded(self):
         server = MockupDB()
-        server.autoresponds('ismaster', ismaster=True, msg='isdbgrid')
+        server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
+                            minWireVersion=2, maxWireVersion=6)
         server.run()
         self.addCleanup(server.stop)
 
@@ -51,20 +53,21 @@ class TestQueryAndReadModeSharded(unittest.TestCase):
                                                       read_preference=mode)
                 cursor = collection.find(query.copy())
                 with going(next, cursor):
-                    request = server.receives(OpQuery)
+                    request = server.receives()
                     if mode in modes_without_query:
                         # Query is not edited: {'a': 1} is not nested in $query,
                         # {'$query': {'a': 1}} is not hoisted.
-                        request.assert_matches(query)
+                        request.assert_matches(Command(
+                            SON([('find', 'test'),
+                                 ('filter', {'a': 1})])))
                         self.assertFalse('$readPreference' in request)
                     else:
-                        # {'a': 1} is *always* nested in $query.
-                        request.assert_matches({
-                            '$query': {'a': 1},
-                            '$readPreference': mode.document
-                        })
+                        # Command is nested in $query.
+                        request.assert_matches(Command(
+                            {'$query': SON([('find', 'test'),
+                                            ('filter', {'a': 1})])}))
 
-                    request.replies({})
+                    request.replies({'cursor': {'id': 0, 'firstBatch': [{}]}})
 
 
 if __name__ == '__main__':

@@ -33,7 +33,8 @@ class TestGetmoreSharded(unittest.TestCase):
         q = Queue()
         for server in servers:
             server.subscribe(q.put)
-            server.autoresponds('ismaster', ismaster=True, msg='isdbgrid')
+            server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
+                                minWireVersion=2, maxWireVersion=6)
             server.run()
             self.addCleanup(server.stop)
 
@@ -45,14 +46,16 @@ class TestGetmoreSharded(unittest.TestCase):
         cursor = collection.find()
         with going(next, cursor):
             query = q.get(timeout=1)
-            query.replies({}, cursor_id=123)
+            query.replies({'cursor': {'id': 123, 'firstBatch': [{}]}})
 
         # 10 batches, all getMores go to same server.
         for i in range(1, 10):
             with going(next, cursor):
                 getmore = q.get(timeout=1)
                 self.assertEqual(query.server, getmore.server)
-                getmore.replies({}, starting_from=i, cursor_id=123)
+                cursor_id = 123 if i < 9 else 0
+                getmore.replies({'cursor': {'id': cursor_id,
+                                            'nextBatch': [{}]}})
 
 
 if __name__ == '__main__':
