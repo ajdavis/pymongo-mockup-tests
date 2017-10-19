@@ -82,6 +82,41 @@ class TestClusterTime(unittest.TestCase):
 
         self.cluster_time_conversation(callback, self.batches)
 
+    def test_monitor(self):
+        cluster_time = Timestamp(0, 0)
+        reply = {'minWireVersion': 0,
+                 'maxWireVersion': 6,
+                 '$clusterTime': {'clusterTime': cluster_time}}
+
+        server = MockupDB()
+        server.run()
+        self.addCleanup(server.stop)
+
+        client = MongoClient(server.uri, heartbeatFrequencyMS=500)
+        self.addCleanup(client.close)
+
+        request = server.receives('ismaster')
+        # No $clusterTime in first ismaster, only in subsequent ones
+        self.assertNotIn('$clusterTime', request)
+        request.ok(reply)
+
+        # Next exchange: client returns first clusterTime, we send the second.
+        request = server.receives('ismaster')
+        self.assertIn('$clusterTime', request)
+        self.assertEqual(request['$clusterTime']['clusterTime'],
+                         cluster_time)
+        cluster_time = Timestamp(cluster_time.time,
+                                 cluster_time.inc + 1)
+        reply['$clusterTime'] = {'clusterTime': cluster_time}
+        request.reply(reply)
+
+        # Third exchange: client returns second clusterTime.
+        request = server.receives('ismaster')
+        self.assertEqual(request['$clusterTime']['clusterTime'],
+                         cluster_time)
+        request.reply(reply)
+        client.close()
+
 
 if __name__ == '__main__':
     unittest.main()
