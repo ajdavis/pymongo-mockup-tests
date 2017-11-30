@@ -63,7 +63,9 @@ class TestClusterTime(unittest.TestCase):
                 UpdateOne({}, {'$inc': {'x': 1}}),
                 DeleteMany({})])
 
-        self.cluster_time_conversation(callback, [{'ok': 1}] * 3)
+        # An update command should always return nModified.
+        self.cluster_time_conversation(
+            callback, [{'ok': 1}, {'ok': 1, 'nModified': 1}, {'ok': 1}])
 
     batches = [
         {'cursor': {'id': 123, 'firstBatch': [{'a': 1}]}},
