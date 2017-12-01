@@ -25,17 +25,21 @@ class TestClusterTime(unittest.TestCase):
     def cluster_time_conversation(self, callback, replies):
         cluster_time = Timestamp(0, 0)
         server = MockupDB()
-        server.autoresponds('ismaster',
-                            {'minWireVersion': 2,
-                             'maxWireVersion': 6,
-                             '$clusterTime': {'clusterTime': cluster_time}})
+
+        # First test all commands include $clusterTime with wire version 6.
+        responder = server.autoresponds(
+            'ismaster',
+            {'minWireVersion': 0,
+             'maxWireVersion': 6,
+             '$clusterTime': {'clusterTime': cluster_time}})
+
         server.run()
         self.addCleanup(server.stop)
 
         client = MongoClient(server.uri)
         self.addCleanup(client.close)
 
-        with going(callback, client) as future:
+        with going(callback, client):
             for reply in replies:
                 request = server.receives()
                 self.assertIn('$clusterTime', request)
@@ -46,7 +50,22 @@ class TestClusterTime(unittest.TestCase):
                 reply['$clusterTime'] = {'clusterTime': cluster_time}
                 request.reply(reply)
 
-        future()
+        # Now test that no commands include $clusterTime with wire version 5,
+        # even though the isMaster reply still has $clusterTime.
+        server.cancel_responder(responder)
+        server.autoresponds('ismaster',
+                            {'minWireVersion': 0,
+                             'maxWireVersion': 5,
+                             '$clusterTime': {'clusterTime': cluster_time}})
+
+        client = MongoClient(server.uri)
+        self.addCleanup(client.close)
+
+        with going(callback, client):
+            for reply in replies:
+                request = server.receives()
+                self.assertNotIn('$clusterTime', request)
+                request.reply(reply)
 
     def test_command(self):
         def callback(client):
@@ -63,9 +82,11 @@ class TestClusterTime(unittest.TestCase):
                 UpdateOne({}, {'$inc': {'x': 1}}),
                 DeleteMany({})])
 
-        # An update command should always return nModified.
         self.cluster_time_conversation(
-            callback, [{'ok': 1}, {'ok': 1, 'nModified': 1}, {'ok': 1}])
+            callback,
+            [{'ok': 1, 'nInserted': 2},
+             {'ok': 1, 'nModified': 1},
+             {'ok': 1, 'nDeleted': 2}])
 
     batches = [
         {'cursor': {'id': 123, 'firstBatch': [{'a': 1}]}},
@@ -83,6 +104,12 @@ class TestClusterTime(unittest.TestCase):
             list(client.db.collection.aggregate([]))
 
         self.cluster_time_conversation(callback, self.batches)
+
+    def test_explain(self):
+        def callback(client):
+            client.db.collection.find().explain()
+
+        self.cluster_time_conversation(callback, [{'ok': 1}])
 
     def test_monitor(self):
         cluster_time = Timestamp(0, 0)
