@@ -39,7 +39,7 @@ class TestHandshake(unittest.TestCase):
             server.run()
             self.addCleanup(server.stop)
 
-        hosts = [server.address_string for server in primary, secondary]
+        hosts = [server.address_string for server in (primary, secondary)]
         primary_response = OpReply('ismaster', True,
                                    setName='rs', hosts=hosts,
                                    minWireVersion=2, maxWireVersion=6)

@@ -32,7 +32,7 @@ class TestSlaveOkayRS(unittest.TestCase):
             self.addCleanup(server.stop)
 
         hosts = [server.address_string
-                 for server in self.primary, self.secondary]
+                 for server in (self.primary, self.secondary)]
         self.primary.autoresponds(
             'ismaster',
             ismaster=True, setName='rs', hosts=hosts,
