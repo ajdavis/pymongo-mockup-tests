@@ -143,6 +143,32 @@ class TestClusterTime(unittest.TestCase):
         request = server.receives('ismaster')
         self.assertEqual(request['$clusterTime']['clusterTime'],
                          cluster_time)
+
+        # Return command error with a new clusterTime.
+        cluster_time = Timestamp(cluster_time.time,
+                                 cluster_time.inc + 1)
+        error = {'ok': 0,
+                 'code': 211,
+                 'errmsg': 'Cache Reader No keys found for HMAC ...',
+                 '$clusterTime': {'clusterTime': cluster_time}}
+        request.reply(error)
+
+        # Fourth exchange: the Monitor retry attempt uses the clusterTime from
+        # the previous isMaster error.
+        request = server.receives('ismaster')
+        self.assertEqual(request['$clusterTime']['clusterTime'],
+                         cluster_time)
+
+        cluster_time = Timestamp(cluster_time.time,
+                                 cluster_time.inc + 1)
+        error['$clusterTime'] = {'clusterTime': cluster_time}
+        request.reply(error)
+
+        # Fifth exchange: the Monitor attempt uses the clusterTime from
+        # the previous isMaster error.
+        request = server.receives('ismaster')
+        self.assertEqual(request['$clusterTime']['clusterTime'],
+                         cluster_time)
         request.reply(reply)
         client.close()
 
