@@ -43,6 +43,8 @@ class TestHandshake(unittest.TestCase):
         primary_response = OpReply('ismaster', True,
                                    setName='rs', hosts=hosts,
                                    minWireVersion=2, maxWireVersion=6)
+        error_response = OpReply(
+            0, errmsg='Cache Reader No keys found for HMAC ...', code=211)
 
         secondary_response = OpReply('ismaster', False,
                                      setName='rs', hosts=hosts,
@@ -66,6 +68,12 @@ class TestHandshake(unittest.TestCase):
         heartbeat.ok(secondary_response)
 
         # Subsequent heartbeats have no client data.
+        primary.receives('ismaster', 1, client=absent).ok(error_response)
+        secondary.receives('ismaster', 1, client=absent).ok(error_response)
+        # The heartbeat retry has no client data after a command failure.
+        primary.receives('ismaster', 1, client=absent).ok(error_response)
+        secondary.receives('ismaster', 1, client=absent).ok(error_response)
+        # Still no client data.
         primary.receives('ismaster', 1, client=absent).ok(primary_response)
         secondary.receives('ismaster', 1, client=absent).ok(secondary_response)
 
