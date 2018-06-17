@@ -21,16 +21,16 @@ from pymongo.read_preferences import (Primary,
                                       Secondary,
                                       SecondaryPreferred,
                                       Nearest)
-from mockupdb import MockupDB, going, Command
+from mockupdb import MockupDB, going, Command, OpMsg
 
 from tests import unittest
 
 
 class TestQueryAndReadModeSharded(unittest.TestCase):
-    def test_query_and_read_mode_sharded(self):
+    def test_query_and_read_mode_sharded_op_query(self):
         server = MockupDB()
         server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
-                            minWireVersion=2, maxWireVersion=6)
+                            minWireVersion=2, maxWireVersion=5)
         server.run()
         self.addCleanup(server.stop)
 
@@ -47,6 +47,7 @@ class TestQueryAndReadModeSharded(unittest.TestCase):
             Nearest(),
             SecondaryPreferred([{'tag': 'value'}]),)
 
+        find_command = SON([('find', 'test'), ('filter', {'a': 1})])
         for query in ({'a': 1}, {'$query': {'a': 1}},):
             for mode in modes_with_query + modes_without_query:
                 collection = client.db.get_collection('test',
@@ -55,17 +56,54 @@ class TestQueryAndReadModeSharded(unittest.TestCase):
                 with going(next, cursor):
                     request = server.receives()
                     if mode in modes_without_query:
-                        # Query is not edited: {'a': 1} is not nested in $query,
-                        # {'$query': {'a': 1}} is not hoisted.
-                        request.assert_matches(Command(
-                            SON([('find', 'test'),
-                                 ('filter', {'a': 1})])))
+                        # Filter is hoisted out of $query.
+                        request.assert_matches(Command(find_command))
                         self.assertFalse('$readPreference' in request)
                     else:
                         # Command is nested in $query.
                         request.assert_matches(Command(
-                            {'$query': SON([('find', 'test'),
-                                            ('filter', {'a': 1})])}))
+                            SON([('$query', find_command),
+                                 ('$readPreference', mode.document)])))
+
+                    request.replies({'cursor': {'id': 0, 'firstBatch': [{}]}})
+
+    def test_query_and_read_mode_sharded_op_msg(self):
+        """Test OP_MSG sends non-primary $readPreference and never $query."""
+        server = MockupDB()
+        server.autoresponds('ismaster', ismaster=True, msg='isdbgrid',
+                            minWireVersion=2, maxWireVersion=6)
+        server.run()
+        self.addCleanup(server.stop)
+
+        client = MongoClient(server.uri)
+        self.addCleanup(client.close)
+
+        modes_omit_read_pref = (Primary(),)
+
+        modes_send_read_pref = (
+            SecondaryPreferred(),
+            PrimaryPreferred(),
+            Secondary(),
+            Nearest(),
+            SecondaryPreferred([{'tag': 'value'}]),)
+
+        find_command = SON([('find', 'test'), ('filter', {'a': 1})])
+        for query in ({'a': 1}, {'$query': {'a': 1}},):
+            for mode in modes_omit_read_pref + modes_send_read_pref:
+                collection = client.db.get_collection('test',
+                                                      read_preference=mode)
+                cursor = collection.find(query.copy())
+                with going(next, cursor):
+                    request = server.receives()
+                    if mode in modes_omit_read_pref:
+                        request.assert_matches(OpMsg(find_command))
+                        self.assertFalse('$readPreference' in request)
+                    else:
+                        # Command is not nested in $query.
+                        request.assert_matches(OpMsg(
+                            SON([('find', 'test'),
+                                 ('filter', {'a': 1}),
+                                 ('$readPreference', mode.document)])))
 
                     request.replies({'cursor': {'id': 0, 'firstBatch': [{}]}})
 

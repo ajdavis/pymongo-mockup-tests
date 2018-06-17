@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from mockupdb import MockupDB, OpReply, absent, Command, go
+from mockupdb import MockupDB, OpReply, OpMsg, absent, Command, go
 from pymongo import MongoClient, version as pymongo_version, version_tuple
 
 from tests import unittest
@@ -99,7 +99,10 @@ class TestHandshake(unittest.TestCase):
                     request.ok(primary_response)
             else:
                 # Command succeeds.
-                request.assert_matches(Command('whatever'))
+                if version_tuple >= (3, 7):
+                    request.assert_matches(OpMsg('whatever'))
+                else:
+                    request.assert_matches(Command('whatever'))
                 request.ok()
                 assert future()
                 return
