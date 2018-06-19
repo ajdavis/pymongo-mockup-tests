@@ -164,7 +164,6 @@ def create_op_msg_read_mode_test(mode, operation):
 
         future()  # No error.
 
-
         self.assertEqual(expected_pref.document,
                          request.doc.get('$readPreference'))
         self.assertNotIn('$query', request.doc)
