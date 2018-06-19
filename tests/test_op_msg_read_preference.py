@@ -26,9 +26,17 @@ from tests.operations import operations
 
 
 class OpMsgReadPrefBase(unittest.TestCase):
+    single_mongod = False
 
-    def setup_client(self, read_preference=None):
-        raise NotImplementedError
+    @classmethod
+    def add_test(cls, mode, test_name, test):
+        setattr(cls, test_name, test)
+
+    def setup_client(self, read_preference):
+        client = MongoClient(self.primary.uri,
+                             read_preference=read_preference)
+        self.addCleanup(client.close)
+        return client
 
 
 class TestOpMsgMongos(OpMsgReadPrefBase):
@@ -50,19 +58,6 @@ class TestOpMsgMongos(OpMsgReadPrefBase):
     def tearDownClass(cls):
         cls.primary.stop()
         super(TestOpMsgMongos, cls).tearDownClass()
-
-    @classmethod
-    def add_test(cls, mode, test_name, test):
-        setattr(cls, test_name, test)
-
-    def setup_client(self, read_preference=None):
-        if read_preference is None:
-            client = MongoClient(self.primary.uri)
-        else:
-            client = MongoClient(self.primary.uri,
-                                 read_preference=read_preference)
-        self.addCleanup(client.close)
-        return client
 
 
 class TestOpMsgReplicaSet(OpMsgReadPrefBase):
@@ -103,13 +98,10 @@ class TestOpMsgReplicaSet(OpMsgReadPrefBase):
         if mode != 'nearest':
             setattr(cls, test_name, test)
 
-    def setup_client(self, read_preference=None):
-        if read_preference is None:
-            client = MongoClient(self.primary.uri, replicaSet='rs')
-        else:
-            client = MongoClient(self.primary.uri,
-                                 replicaSet='rs',
-                                 read_preference=read_preference)
+    def setup_client(self, read_preference):
+        client = MongoClient(self.primary.uri,
+                             replicaSet='rs',
+                             read_preference=read_preference)
 
         # Run a command on a secondary to discover the topology. This ensures
         # that secondaryPreferred commands will select the secondary.
@@ -117,6 +109,27 @@ class TestOpMsgReplicaSet(OpMsgReadPrefBase):
                              read_preference=ReadPreference.SECONDARY)
         self.addCleanup(client.close)
         return client
+
+
+class TestOpMsgSingle(OpMsgReadPrefBase):
+    single_mongod = True
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestOpMsgSingle, cls).setUpClass()
+        auto_ismaster = {
+            'ismaster': True,
+            'minWireVersion': 2,
+            'maxWireVersion': 6,
+        }
+        cls.primary = MockupDB(auto_ismaster=auto_ismaster)
+        cls.primary.run()
+        cls.secondary = cls.primary
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.primary.stop()
+        super(TestOpMsgSingle, cls).tearDownClass()
 
 
 def create_op_msg_read_mode_test(mode, operation):
@@ -128,18 +141,22 @@ def create_op_msg_read_mode_test(mode, operation):
 
         if operation.op_type == 'always-use-secondary':
             expected_server = self.secondary
-            expected_pref = ReadPreference.SECONDARY.document
+            expected_pref = ReadPreference.SECONDARY
         elif operation.op_type == 'must-use-primary':
             expected_server = self.primary
-            expected_pref = ReadPreference.PRIMARY.document
+            expected_pref = ReadPreference.PRIMARY
         elif operation.op_type == 'may-use-secondary':
             if mode in ('primary', 'primaryPreferred'):
                 expected_server = self.primary
             else:
                 expected_server = self.secondary
-            expected_pref = pref.document
+            expected_pref = pref
         else:
             self.fail('unrecognized op_type %r' % operation.op_type)
+
+        # For single mongod we send primaryPreferred instead of primary.
+        if expected_pref == ReadPreference.PRIMARY and self.single_mongod:
+            expected_pref = ReadPreference.PRIMARY_PREFERRED
 
         with going(operation.function, client) as future:
             request = expected_server.receive()
@@ -147,7 +164,9 @@ def create_op_msg_read_mode_test(mode, operation):
 
         future()  # No error.
 
-        self.assertEqual(expected_pref, request.doc.get('$readPreference'))
+
+        self.assertEqual(expected_pref.document,
+                         request.doc.get('$readPreference'))
         self.assertNotIn('$query', request.doc)
 
     return test
@@ -162,8 +181,8 @@ def generate_op_msg_read_mode_tests():
         test_name = 'test_%s_with_mode_%s' % (
             operation.name.replace(' ', '_'), mode)
         test.__name__ = test_name
-        TestOpMsgReplicaSet.add_test(mode, test_name, test)
-        TestOpMsgMongos.add_test(mode, test_name, test)
+        for cls in TestOpMsgMongos, TestOpMsgReplicaSet, TestOpMsgSingle:
+            cls.add_test(mode, test_name, test)
 
 
 generate_op_msg_read_mode_tests()
