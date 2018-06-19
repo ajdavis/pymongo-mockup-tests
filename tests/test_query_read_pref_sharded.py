@@ -78,32 +78,26 @@ class TestQueryAndReadModeSharded(unittest.TestCase):
         client = MongoClient(server.uri)
         self.addCleanup(client.close)
 
-        modes_omit_read_pref = (Primary(),)
-
-        modes_send_read_pref = (
+        read_prefs = (
+            Primary(),
             SecondaryPreferred(),
             PrimaryPreferred(),
             Secondary(),
             Nearest(),
             SecondaryPreferred([{'tag': 'value'}]),)
 
-        find_command = SON([('find', 'test'), ('filter', {'a': 1})])
         for query in ({'a': 1}, {'$query': {'a': 1}},):
-            for mode in modes_omit_read_pref + modes_send_read_pref:
+            for mode in read_prefs:
                 collection = client.db.get_collection('test',
                                                       read_preference=mode)
                 cursor = collection.find(query.copy())
                 with going(next, cursor):
                     request = server.receives()
-                    if mode in modes_omit_read_pref:
-                        request.assert_matches(OpMsg(find_command))
-                        self.assertFalse('$readPreference' in request)
-                    else:
-                        # Command is not nested in $query.
-                        request.assert_matches(OpMsg(
-                            SON([('find', 'test'),
-                                 ('filter', {'a': 1}),
-                                 ('$readPreference', mode.document)])))
+                    # Command is not nested in $query.
+                    request.assert_matches(OpMsg(
+                        SON([('find', 'test'),
+                             ('filter', {'a': 1}),
+                             ('$readPreference', mode.document)])))
 
                     request.replies({'cursor': {'id': 0, 'firstBatch': [{}]}})
 
