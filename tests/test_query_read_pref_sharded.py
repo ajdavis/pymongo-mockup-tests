@@ -15,7 +15,7 @@
 """Test PyMongo query and read preference with a sharded cluster."""
 
 from bson import SON
-from pymongo import MongoClient
+from pymongo import MongoClient, version_tuple
 from pymongo.read_preferences import (Primary,
                                       PrimaryPreferred,
                                       Secondary,
@@ -67,6 +67,7 @@ class TestQueryAndReadModeSharded(unittest.TestCase):
 
                     request.replies({'cursor': {'id': 0, 'firstBatch': [{}]}})
 
+    @unittest.skipUnless(version_tuple >= (3, 7), "requires PyMongo 3.7")
     def test_query_and_read_mode_sharded_op_msg(self):
         """Test OP_MSG sends non-primary $readPreference and never $query."""
         server = MockupDB()
