@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from mockupdb import MockupDB, going, OpInsert, absent, Command
-from pymongo import MongoClient, WriteConcern
+from bson.son import SON
+from mockupdb import (MockupDB, going, OpInsert, OpMsg, absent, Command,
+                      OP_MSG_FLAGS)
+from pymongo import MongoClient, WriteConcern, version_tuple
 
 from tests import unittest
 
@@ -34,7 +36,14 @@ class TestLegacyCRUD(unittest.TestCase):
         coll = client.db.get_collection('coll', write_concern=WriteConcern(w=0))
         doc = {}
         with going(coll.insert, doc, manipulate=False) as future:
-            server.receives(OpInsert({'_id': absent}))
+            if version_tuple >= (3, 7):
+                server.receives(OpMsg(SON([
+                    ("insert", "coll"),
+                    ("ordered", True),
+                    ("writeConcern", {"w": 0}),
+                    ("documents", [{}])]), flags=OP_MSG_FLAGS['moreToCome']))
+            else:
+                server.receives(OpInsert({'_id': absent}))
 
         self.assertFalse('_id' in doc)
         self.assertIsNone(future())
