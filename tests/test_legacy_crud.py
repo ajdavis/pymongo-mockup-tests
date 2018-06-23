@@ -38,7 +38,7 @@ class TestLegacyCRUD(unittest.TestCase):
         with going(coll.insert, doc, manipulate=False) as future:
             if version_tuple >= (3, 7):
                 server.receives(OpMsg(SON([
-                    ("insert", "coll"),
+                    ("insert", coll.name),
                     ("ordered", True),
                     ("writeConcern", {"w": 0}),
                     ("documents", [{}])]), flags=OP_MSG_FLAGS['moreToCome']))
@@ -50,14 +50,32 @@ class TestLegacyCRUD(unittest.TestCase):
 
         docs = [{}]  # One doc in a list.
         with going(coll.insert, docs, manipulate=False) as future:
-            server.receives(OpInsert({'_id': absent}))
+            if version_tuple >= (3, 7):
+                # PyMongo 3.7 ordered bulk w:0 writes use implicit w:1.
+                request = server.receives()
+                request.assert_matches(OpMsg(SON([
+                    ("insert", coll.name),
+                    ("ordered", True),
+                    ("documents", [{}])]), flags=0))
+                request.reply({"n": 1})
+            else:
+                server.receives(OpInsert({'_id': absent}))
 
         self.assertFalse('_id' in docs[0])
         self.assertEqual(future(), [None])
 
         docs = [{}, {}]  # Two docs.
         with going(coll.insert, docs, manipulate=False) as future:
-            server.receives(OpInsert({'_id': absent}, {'_id': absent}))
+            if version_tuple >= (3, 7):
+                # PyMongo 3.7 ordered bulk w:0 writes use implicit w:1.
+                request = server.receives()
+                request.assert_matches(OpMsg(SON([
+                    ("insert", coll.name),
+                    ("ordered", True),
+                    ("documents", [{}, {}])]), flags=0))
+                request.reply({"n": 2})
+            else:
+                server.receives(OpInsert({'_id': absent}, {'_id': absent}))
 
         self.assertFalse('_id' in docs[0])
         self.assertFalse('_id' in docs[1])

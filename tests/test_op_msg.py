@@ -16,6 +16,7 @@ from collections import namedtuple
 
 from mockupdb import MockupDB, going, OpMsg, OP_MSG_FLAGS
 from pymongo import MongoClient, WriteConcern, version_tuple
+from pymongo.operations import InsertOne, UpdateOne, DeleteOne
 
 from tests import unittest
 
@@ -37,10 +38,28 @@ write_operations = [
         request=OpMsg({"insert": "coll"}, flags=OP_MSG_FLAGS['moreToCome']),
         reply=None),
     WriteOperation(
+        'insert_many',
+        lambda coll: coll.insert_many([{}, {}, {}]),
+        request=OpMsg({"insert": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 3}),
+    WriteOperation(
+        'insert_many-w0',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).insert_many([{}, {}, {}]),
+        request=OpMsg({"insert": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 3}),
+    WriteOperation(
+        'insert_many-w0-unordered',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).insert_many(
+                [{}, {}, {}], ordered=False),
+        request=OpMsg({"insert": "coll"}, flags=OP_MSG_FLAGS['moreToCome']),
+        reply=None),
+    WriteOperation(
         'replace_one',
         lambda coll: coll.replace_one({"_id": 1}, {"new": 1}),
         request=OpMsg({"update": "coll"}, flags=0),
-        reply={'ok': 1, 'n': 1}),
+        reply={'ok': 1, 'n': 1, 'nModified': 1}),
     WriteOperation(
         'replace_one-w0',
         lambda coll: coll.with_options(
@@ -52,7 +71,7 @@ write_operations = [
         'update_one',
         lambda coll: coll.update_one({"_id": 1}, {"$set": {"new": 1}}),
         request=OpMsg({"update": "coll"}, flags=0),
-        reply={'ok': 1, 'n': 1}),
+        reply={'ok': 1, 'n': 1, 'nModified': 1}),
     WriteOperation(
         'replace_one-w0',
         lambda coll: coll.with_options(
@@ -64,7 +83,7 @@ write_operations = [
         'update_many',
         lambda coll: coll.update_many({"_id": 1}, {"$set": {"new": 1}}),
         request=OpMsg({"update": "coll"}, flags=0),
-        reply={'ok': 1, 'n': 1}),
+        reply={'ok': 1, 'n': 1, 'nModified': 1}),
     WriteOperation(
         'update_many-w0',
         lambda coll: coll.with_options(
@@ -115,7 +134,7 @@ write_operations = [
         'update',
         lambda coll: coll.update({"_id": 1}, {"new": 1}),
         request=OpMsg({"update": "coll"}, flags=0),
-        reply={'ok': 1, 'n': 1}),
+        reply={'ok': 1, 'n': 1, 'nModified': 1}),
     WriteOperation(
         'update-w0',
         lambda coll: coll.with_options(
@@ -141,6 +160,68 @@ write_operations = [
     WriteOperation(
         'remove-w0-argument',
         lambda coll: coll.remove({"_id": 1}, w=0),
+        request=OpMsg({"delete": "coll"}, flags=OP_MSG_FLAGS['moreToCome']),
+        reply=None),
+    WriteOperation(
+        'bulk_write_insert',
+        lambda coll: coll.bulk_write([InsertOne({}), InsertOne({})]),
+        request=OpMsg({"insert": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 2}),
+    WriteOperation(
+        'bulk_write_insert-w0',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).bulk_write([InsertOne({}),
+                                                         InsertOne({})]),
+        request=OpMsg({"insert": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 2}),
+    WriteOperation(
+        'bulk_write_insert-w0-unordered',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).bulk_write(
+            [InsertOne({}), InsertOne({})], ordered=False),
+        request=OpMsg({"insert": "coll"}, flags=OP_MSG_FLAGS['moreToCome']),
+        reply=None),
+    WriteOperation(
+        'bulk_write_update',
+        lambda coll: coll.bulk_write([
+            UpdateOne({"_id": 1}, {"$set": {"new": 1}}),
+            UpdateOne({"_id": 2}, {"$set": {"new": 1}})]),
+        request=OpMsg({"update": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 2, 'nModified': 2}),
+    WriteOperation(
+        'bulk_write_update-w0',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).bulk_write([
+                UpdateOne({"_id": 1}, {"$set": {"new": 1}}),
+                UpdateOne({"_id": 2}, {"$set": {"new": 1}})]),
+        request=OpMsg({"update": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 2, 'nModified': 2}),
+    WriteOperation(
+        'bulk_write_update-w0-unordered',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).bulk_write([
+                UpdateOne({"_id": 1}, {"$set": {"new": 1}}),
+                UpdateOne({"_id": 2}, {"$set": {"new": 1}})], ordered=False),
+        request=OpMsg({"update": "coll"}, flags=OP_MSG_FLAGS['moreToCome']),
+        reply=None),
+    WriteOperation(
+        'bulk_write_delete',
+        lambda coll: coll.bulk_write([
+            DeleteOne({"_id": 1}), DeleteOne({"_id": 2})]),
+        request=OpMsg({"delete": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 2}),
+    WriteOperation(
+        'bulk_write_delete-w0',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).bulk_write([
+                DeleteOne({"_id": 1}), DeleteOne({"_id": 2})]),
+        request=OpMsg({"delete": "coll"}, flags=0),
+        reply={'ok': 1, 'n': 2}),
+    WriteOperation(
+        'bulk_write_delete-w0-unordered',
+        lambda coll: coll.with_options(
+            write_concern=WriteConcern(w=0)).bulk_write([
+                DeleteOne({"_id": 1}), DeleteOne({"_id": 2})], ordered=False),
         request=OpMsg({"delete": "coll"}, flags=OP_MSG_FLAGS['moreToCome']),
         reply=None),
 ]
