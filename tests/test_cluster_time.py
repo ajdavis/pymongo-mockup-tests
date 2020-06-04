@@ -16,7 +16,11 @@
 
 from bson import Timestamp
 from mockupdb import going, MockupDB
-from pymongo import MongoClient, InsertOne, UpdateOne, DeleteMany
+from pymongo import (MongoClient,
+                     InsertOne,
+                     UpdateOne,
+                     DeleteMany,
+                     version_tuple)
 
 from tests import unittest
 
@@ -153,16 +157,28 @@ class TestClusterTime(unittest.TestCase):
                  '$clusterTime': {'clusterTime': cluster_time}}
         request.reply(error)
 
-        # Fourth exchange: the Monitor retry attempt uses the clusterTime from
-        # the previous isMaster error.
-        request = server.receives('ismaster')
-        self.assertEqual(request['$clusterTime']['clusterTime'],
-                         cluster_time)
+        # PyMongo 3.11+ closes the monitoring connection on command errors.
+        if version_tuple >= (3, 11, -1):
+            # Fourth exchange: the Monitor closes the connection and runs the
+            # handshake on a new connection.
+            request = server.receives('ismaster')
+            # No $clusterTime in first ismaster, only in subsequent ones
+            self.assertNotIn('$clusterTime', request)
 
-        cluster_time = Timestamp(cluster_time.time,
-                                 cluster_time.inc + 1)
-        error['$clusterTime'] = {'clusterTime': cluster_time}
-        request.reply(error)
+            # Reply without $clusterTime.
+            reply.pop('$clusterTime')
+            request.reply(reply)
+        else:
+            # Fourth exchange: the Monitor retry attempt uses the clusterTime
+            # from the previous isMaster error.
+            request = server.receives('ismaster')
+            self.assertEqual(request['$clusterTime']['clusterTime'],
+                             cluster_time)
+
+            cluster_time = Timestamp(cluster_time.time,
+                                     cluster_time.inc + 1)
+            error['$clusterTime'] = {'clusterTime': cluster_time}
+            request.reply(error)
 
         # Fifth exchange: the Monitor attempt uses the clusterTime from
         # the previous isMaster error.

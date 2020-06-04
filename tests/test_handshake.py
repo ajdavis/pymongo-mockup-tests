@@ -71,9 +71,22 @@ class TestHandshake(unittest.TestCase):
         # Subsequent heartbeats have no client data.
         primary.receives('ismaster', 1, client=absent).ok(error_response)
         secondary.receives('ismaster', 1, client=absent).ok(error_response)
-        # The heartbeat retry has no client data after a command failure.
-        primary.receives('ismaster', 1, client=absent).ok(error_response)
-        secondary.receives('ismaster', 1, client=absent).ok(error_response)
+
+        # PyMongo 3.11+ closes the monitoring connection on command errors.
+        if version_tuple >= (3, 11, -1):
+            # The heartbeat retry (on a new connection) does have client data.
+            heartbeat = primary.receives('ismaster')
+            _check_handshake_data(heartbeat)
+            heartbeat.ok(primary_response)
+
+            heartbeat = secondary.receives('ismaster')
+            _check_handshake_data(heartbeat)
+            heartbeat.ok(secondary_response)
+        else:
+            # The heartbeat retry has no client data after a command failure.
+            primary.receives('ismaster', 1, client=absent).ok(error_response)
+            secondary.receives('ismaster', 1, client=absent).ok(error_response)
+
         # Still no client data.
         primary.receives('ismaster', 1, client=absent).ok(primary_response)
         secondary.receives('ismaster', 1, client=absent).ok(secondary_response)
