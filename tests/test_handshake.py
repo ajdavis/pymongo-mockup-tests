@@ -15,6 +15,7 @@
 
 from mockupdb import MockupDB, OpReply, OpMsg, absent, Command, go
 from pymongo import MongoClient, version as pymongo_version, version_tuple
+from pymongo.errors import OperationFailure
 
 from tests import unittest
 
@@ -95,7 +96,7 @@ class TestHandshake(unittest.TestCase):
                     request.ok(primary_response)
                 else:
                     # Handshaking a new application socket.
-                    _check_handshake_data(heartbeat)
+                    _check_handshake_data(request)
                     request.ok(primary_response)
             else:
                 # Command succeeds.
@@ -106,6 +107,51 @@ class TestHandshake(unittest.TestCase):
                 request.ok()
                 assert future()
                 return
+
+    @unittest.skipUnless(version_tuple >= (3, 11, -1), "requires PyMongo 3.11")
+    def test_client_handshake_saslSupportedMechs(self):
+        server = MockupDB()
+        server.run()
+        self.addCleanup(server.stop)
+
+        primary_response = OpReply('ismaster', True,
+                                   minWireVersion=2, maxWireVersion=6)
+        client = MongoClient(server.uri,
+                             username='username',
+                             password='password')
+
+        self.addCleanup(client.close)
+
+        # New monitoring sockets send data during handshake.
+        heartbeat = server.receives('ismaster')
+        heartbeat.ok(primary_response)
+
+        future = go(client.db.command, 'whatever')
+        for request in server:
+            if request.matches('ismaster'):
+                if request.client_port == heartbeat.client_port:
+                    # This is the monitor again, keep going.
+                    request.ok(primary_response)
+                else:
+                    # Handshaking a new application socket should send
+                    # saslSupportedMechs and speculativeAuthenticate.
+                    self.assertEqual(request['saslSupportedMechs'],
+                                     'admin.username')
+                    self.assertIn(
+                        'saslStart', request['speculativeAuthenticate'])
+                    auth = {'conversationId': 1, 'done': False,
+                            'payload': b'r=wPleNM8S5p8gMaffMDF7Py4ru9bnmmoqb0'
+                                       b'1WNPsil6o=pAvr6B1garhlwc6MKNQ93ZfFky'
+                                       b'tXdF9r,s=4dcxugMJq2P4hQaDbGXZR8uR3ei'
+                                       b'PHrSmh4uhkg==,i=15000'}
+                    request.ok('ismaster', True,
+                               saslSupportedMechs=['SCRAM-SHA-256'],
+                               speculativeAuthenticate=auth,
+                               minWireVersion=2, maxWireVersion=6)
+                    with self.assertRaises(OperationFailure):
+                        future()
+                    return
+
 
 if __name__ == '__main__':
     unittest.main()
