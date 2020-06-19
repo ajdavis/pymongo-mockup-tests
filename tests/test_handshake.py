@@ -148,6 +148,8 @@ class TestHandshake(unittest.TestCase):
                                saslSupportedMechs=['SCRAM-SHA-256'],
                                speculativeAuthenticate=auth,
                                minWireVersion=2, maxWireVersion=6)
+                    # Authentication should immediately fail with:
+                    # OperationFailure: Server returned an invalid nonce.
                     with self.assertRaises(OperationFailure):
                         future()
                     return
