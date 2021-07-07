@@ -69,5 +69,54 @@ class TestCursorNamespace(unittest.TestCase):
         self._test_cursor_namespace(op, 'listIndexes')
 
 
+class TestKillCursorsNamespace(unittest.TestCase):
+    @classmethod
+    @unittest.skipUnless(version_tuple >= (3, 12, -1), 'Fixed in pymongo 3.12')
+    def setUpClass(cls):
+        cls.server = MockupDB(auto_ismaster={'maxWireVersion': 6})
+        cls.server.run()
+        cls.client = MongoClient(cls.server.uri)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.close()
+        cls.server.stop()
+
+    def _test_killCursors_namespace(self, cursor_op, command):
+        with going(cursor_op):
+            request = self.server.receives(
+                **{command: 'collection', 'namespace': 'test'})
+            # Respond with a different namespace.
+            request.reply({'cursor': {
+                'firstBatch': [{'doc': 1}],
+                'id': 123,
+                'ns': 'different_db.different.coll'}})
+            # Client uses the namespace we returned for killCursors.
+            request = self.server.receives(**{
+                'killCursors': 'different.coll',
+                'cursors': [123],
+                '$db': 'different_db'})
+            request.reply({
+                'ok': 1,
+                'cursorsKilled': [123],
+                'cursorsNotFound': [],
+                'cursorsAlive': [],
+                'cursorsUnknown': []})
+
+    def test_aggregate_killCursor(self):
+        def op():
+            cursor = self.client.test.collection.aggregate([], batchSize=1)
+            next(cursor)
+            cursor.close()
+        self._test_killCursors_namespace(op, 'aggregate')
+
+    def test_find_killCursor(self):
+        def op():
+            cursor = self.client.test.collection.find(batch_size=1)
+            next(cursor)
+            cursor.close()
+        self._test_killCursors_namespace(op, 'find')
+
+
 if __name__ == '__main__':
     unittest.main()
