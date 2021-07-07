@@ -96,10 +96,12 @@ class TestKillCursorsNamespace(unittest.TestCase):
                 'killCursors': 'different.coll',
                 'cursors': [123],
                 '$db': 'different_db'})
-
-            request.reply({'cursor': {
-                'nextBatch': [{'doc': 2}],
-                'id': 0}})
+            request.reply({
+                'ok': 1,
+                'cursorsKilled': [123],
+                'cursorsNotFound': [],
+                'cursorsAlive': [],
+                'cursorsUnknown': []})
 
     def test_aggregate_killCursor(self):
         def op():
