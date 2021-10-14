@@ -14,9 +14,10 @@
 
 from collections import namedtuple
 
-from mockupdb import MockupDB, going, OpMsg, OP_MSG_FLAGS
+from mockupdb import MockupDB, going, OpMsg, OpMsgReply, OP_MSG_FLAGS
 from pymongo import MongoClient, WriteConcern, version_tuple
 from pymongo.operations import InsertOne, UpdateOne, DeleteOne
+from pymongo.cursor import CursorType
 
 from tests import unittest
 
@@ -236,13 +237,54 @@ operations = [
         reply=None),
 ]
 
+operations_312 = [
+    Operation(
+        'find_raw_batches',
+        lambda coll: list(coll.find_raw_batches({})),
+        request=[
+            OpMsg({"find": "coll"}, flags=0),
+            OpMsg({"getMore": 7}, flags=0),
+        ],
+        reply=[
+            {'ok': 1, 'cursor': {'firstBatch': [{}], 'id': 7}},
+            {'ok': 1, 'cursor': {'nextBatch': [{}], 'id': 0}},
+        ]),
+    Operation(
+        'aggregate_raw_batches',
+        lambda coll: list(coll.aggregate_raw_batches([])),
+        request=[
+            OpMsg({"aggregate": "coll"}, flags=0),
+            OpMsg({"getMore": 7}, flags=0),
+        ],
+        reply=[
+            {'ok': 1, 'cursor': {'firstBatch': [], 'id': 7}},
+            {'ok': 1, 'cursor': {'nextBatch': [{}], 'id': 0}},
+        ]),
+    Operation(
+        'find_exhaust_cursor',
+        lambda coll: list(coll.find({}, cursor_type=CursorType.EXHAUST)),
+        request=[
+            OpMsg({"find": "coll"}, flags=0),
+            OpMsg({"getMore": 7}, flags=1 << 16),
+        ],
+        reply=[
+            OpMsgReply(
+                {'ok': 1, 'cursor': {'firstBatch': [{}], 'id': 7}}, flags=0),
+            OpMsgReply(
+                {'ok': 1, 'cursor': {'nextBatch': [{}], 'id': 7}}, flags=2),
+            OpMsgReply(
+                {'ok': 1, 'cursor': {'nextBatch': [{}], 'id': 7}}, flags=2),
+            OpMsgReply(
+                {'ok': 1, 'cursor': {'nextBatch': [{}], 'id': 0}}, flags=0),
+        ]),
+]
+
 
 class TestOpMsg(unittest.TestCase):
 
-    @unittest.skipUnless(version_tuple >= (3, 7), "requires PyMongo 3.7")
     @classmethod
     def setUpClass(cls):
-        cls.server = MockupDB(auto_ismaster=True)
+        cls.server = MockupDB(auto_ismaster=True, max_wire_version=8)
         cls.server.run()
         cls.client = MongoClient(cls.server.uri)
 
@@ -254,28 +296,45 @@ class TestOpMsg(unittest.TestCase):
     def _test_operation(self, op):
         coll = self.client.db.coll
         with going(op.function, coll) as future:
-            request = self.server.receives()
-            request.assert_matches(op.request)
-            if op.reply is not None:
-                request.reply(op.reply)
+            expected_requests = op.request
+            replies = op.reply
+            if not isinstance(op.request, list):
+                expected_requests = [op.request]
+                replies = [op.reply]
+
+            for expected_request in expected_requests:
+                request = self.server.receives()
+                request.assert_matches(expected_request)
+                reply = None
+                if replies:
+                    reply = replies.pop(0)
+                if reply is not None:
+                    request.reply(reply)
+            for reply in replies:
+                if reply is not None:
+                    request.reply(reply)
 
         future()  # No error.
 
 
-def operation_test(op):
+def operation_test(op, decorator):
+    @decorator()
     def test(self):
         self._test_operation(op)
     return test
 
 
-def create_tests():
-    for op in operations:
+def create_tests(ops, decorator):
+    for op in ops:
         test_name = "test_op_msg_%s" % (op.name,)
+        setattr(TestOpMsg, test_name, operation_test(op, decorator))
 
-        setattr(TestOpMsg, test_name, operation_test(op))
 
+create_tests(operations, lambda: unittest.skipUnless(
+    version_tuple >= (3, 7), "requires PyMongo 3.7"))
 
-create_tests()
+create_tests(operations_312, lambda: unittest.skipUnless(
+    version_tuple >= (3, 12), "requires PyMongo 3.12"))
 
 if __name__ == '__main__':
     unittest.main()
