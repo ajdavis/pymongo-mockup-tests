@@ -27,6 +27,16 @@ Operation = namedtuple(
 
 operations = [
     Operation(
+        'find_one',
+        lambda coll: coll.find_one({}),
+        request=OpMsg({"find": "coll"}, flags=0),
+        reply={'ok': 1, 'cursor': {'firstBatch': [], 'id': 0}}),
+    Operation(
+        'aggregate',
+        lambda coll: coll.aggregate([]),
+        request=OpMsg({"aggregate": "coll"}, flags=0),
+        reply={'ok': 1, 'cursor': {'firstBatch': [], 'id': 0}}),
+    Operation(
         'insert_one',
         lambda coll: coll.insert_one({}),
         request=OpMsg({"insert": "coll"}, flags=0),
